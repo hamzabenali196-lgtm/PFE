@@ -47,6 +47,12 @@ Backend publishes commands:
 - `robot/servo/oy`: horizontal servo angle, `0` to `180`
 - `robot/servo/oz`: height/extension servo angle, `0` to `180`
 
+## Quick Start (one-liner)
+
+```bash
+sudo systemctl start mosquitto && cd /home/pi/PFE && source .venv/bin/activate && python3 robot_final.py & cd backend && npm run dev & cd ../frontend && npm run dev
+```
+
 ## Install Python Robot Service
 
 ```bash
@@ -121,4 +127,4 @@ VITE_API_URL=http://<raspberry-pi-ip>:4000
 - The USB microphone is controlled from the dashboard through the backend. It uses `arecord` with `MIC_DEVICE=plughw:2,0`, streams a live audio level, and stops the capture process when deactivated. Use `Test sound` to verify browser audio output and `Monitor` to play the USB mic audio in the browser. Browser speech commands are also enabled when supported by the browser.
 - Mic recordings are saved as WAV files under `backend/data/recordings`. The dashboard can record, stop, play, download, and delete recordings. The backend clears old recordings on backend startup and when `robot_final.py` starts, and keeps at most 20 recordings during a run.
 - Media recordings are saved as MP4 files under `backend/data/videos`. The single dashboard record button captures the live `robot/flux` frames plus USB microphone audio, so person-detection boxes drawn by `robot_final.py` and sound are included in the same downloadable video. The dashboard can record, stop, play, download, and delete videos. The backend clears old videos on backend startup and when `robot_final.py` starts, and keeps at most 10 videos during a run.
-# PFE
+
