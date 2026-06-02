@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Robot Spider Dashboard</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d1117;
+      --panel: #151b23;
+      --panel-2: #1c2330;
+      --border: #303a4a;
+      --text: #edf2f7;
+      --muted: #9aa8ba;
+      --green: #2bd576;
+      --red: #ff5c69;
+      --amber: #ffc857;
+      --blue: #5cc8ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    }
+
+    button, input {
+      font: inherit;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 340px;
+      gap: 16px;
+      min-height: 100vh;
+      padding: 16px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+
+    h1, h2, p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: clamp(1.35rem, 3vw, 2rem);
+      font-weight: 750;
+    }
+
+    h2 {
+      font-size: 1rem;
+      margin-bottom: 10px;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      background: var(--panel);
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--amber);
+      box-shadow: 0 0 16px currentColor;
+    }
+
+    .connected .dot { background: var(--green); }
+    .offline .dot, .error .dot { background: var(--red); }
+
+    .stage {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #05070a;
+      min-height: 360px;
+      height: calc(100vh - 112px);
+      display: grid;
+      place-items: center;
+      position: relative;
+    }
+
+    .stage img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    .empty {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      text-align: center;
+      padding: 24px;
+    }
+
+    .side {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 14px;
+    }
+
+    .metric {
+      display: grid;
+      gap: 4px;
+      padding: 12px;
+      border-radius: 8px;
+      background: var(--panel-2);
+      margin-bottom: 10px;
+    }
+
+    .metric:last-child {
+      margin-bottom: 0;
+    }
+
+    .label {
+      color: var(--muted);
+      font-size: .78rem;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    .value {
+      min-height: 1.5em;
+      font-size: 1.05rem;
+      word-break: break-word;
+    }
+
+    .alert {
+      color: var(--red);
+      font-weight: 700;
+    }
+
+    .photo {
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      object-fit: cover;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #05070a;
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .actions button, .actions a {
+      min-height: 42px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--text);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .actions button:hover, .actions a:hover {
+      border-color: var(--blue);
+    }
+
+    @media (max-width: 900px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      .stage {
+        height: 58vh;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .app {
+        padding: 10px;
+      }
+
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .status {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section>
+      <div class="topbar">
+        <div>
+          <h1>Robot Spider</h1>
+          <p class="label">Live detection dashboard</p>
+        </div>
+        <div id="status" class="status">
+          <span class="dot"></span>
+          <span id="statusText">Connecting...</span>
+        </div>
+      </div>
+
+      <div class="stage">
+        <img id="frame" alt="Live robot camera feed" />
+        <div id="empty" class="empty">Waiting for live frames from MQTT topic robot/flux</div>
+      </div>
+    </section>
+
+    <aside class="side">
+      <section class="panel">
+        <h2>Detection</h2>
+        <div class="metric">
+          <span class="label">Last alert</span>
+          <span id="voiceAlert" class="value">No alert received</span>
+        </div>
+        <div class="metric">
+          <span class="label">Frames received</span>
+          <span id="frameCount" class="value">0</span>
+        </div>
+        <div class="metric">
+          <span class="label">Last frame</span>
+          <span id="lastFrame" class="value">-</span>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Alert Photo</h2>
+        <img id="photo" class="photo" alt="Latest alert snapshot" />
+      </section>
+
+      <section class="panel">
+        <h2>Location</h2>
+        <div class="metric">
+          <span class="label">Coordinates</span>
+          <span id="coords" class="value">No position received</span>
+        </div>
+        <div class="actions">
+          <a id="mapLink" href="#" target="_blank" rel="noreferrer">Map</a>
+          <button id="speakToggle" type="button" aria-pressed="true">Voice on</button>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script>
+    const topics = [
+      'robot/flux',
+      'robot/alerte_vocale',
+      'robot/detection',
+      'robot/photo',
+      'robot/localisation'
+    ];
+
+    const statusBox = document.getElementById('status');
+    const statusText = document.getElementById('statusText');
+    const frame = document.getElementById('frame');
+    const empty = document.getElementById('empty');
+    const voiceAlert = document.getElementById('voiceAlert');
+    const frameCount = document.getElementById('frameCount');
+    const lastFrame = document.getElementById('lastFrame');
+    const photo = document.getElementById('photo');
+    const coords = document.getElementById('coords');
+    const mapLink = document.getElementById('mapLink');
+    const speakToggle = document.getElementById('speakToggle');
+
+    let frames = 0;
+    let voiceEnabled = true;
+
+    const brokerHost = location.hostname || 'localhost';
+    const wsUrl = `ws://${brokerHost}:9001`;
+    const client = mqtt.connect(wsUrl, { reconnectPeriod: 2000 });
+
+    function setStatus(state, message) {
+      statusBox.className = `status ${state}`;
+      statusText.textContent = message;
+    }
+
+    function nowLabel() {
+      return new Date().toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+    }
+
+    function showBase64Image(img, payload) {
+      img.src = `data:image/jpeg;base64,${payload.toString()}`;
+    }
+
+    function speak(text) {
+      if (!voiceEnabled || !('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+    }
+
+    client.on('connect', () => {
+      setStatus('connected', `Connected to ${wsUrl}`);
+      topics.forEach((topic) => client.subscribe(topic));
+    });
+
+    client.on('reconnect', () => setStatus('', 'Reconnecting...'));
+    client.on('offline', () => setStatus('offline', 'Offline'));
+    client.on('error', (err) => setStatus('error', `Error: ${err.message || err}`));
+
+    client.on('message', (topic, payload) => {
+      const text = payload.toString();
+
+      if (topic === 'robot/flux') {
+        showBase64Image(frame, payload);
+        empty.style.display = 'none';
+        frames += 1;
+        frameCount.textContent = frames;
+        lastFrame.textContent = nowLabel();
+      }
+
+      if (topic === 'robot/alerte_vocale' || topic === 'robot/detection') {
+        voiceAlert.textContent = text;
+        voiceAlert.classList.add('alert');
+        speak(text);
+      }
+
+      if (topic === 'robot/photo') {
+        showBase64Image(photo, payload);
+      }
+
+      if (topic === 'robot/localisation') {
+        coords.textContent = text;
+        mapLink.href = `https://www.google.com/maps?q=${encodeURIComponent(text)}`;
+      }
+    });
+
+    speakToggle.addEventListener('click', () => {
+      voiceEnabled = !voiceEnabled;
+      speakToggle.textContent = voiceEnabled ? 'Voice on' : 'Voice off';
+      speakToggle.setAttribute('aria-pressed', String(voiceEnabled));
+      if (!voiceEnabled && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    });
+  </script>
+</body>
+</html>
