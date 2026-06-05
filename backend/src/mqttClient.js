@@ -11,7 +11,9 @@ const inboundTopics = [
   'robot/localisation',
   'robot/alerte_vocale',
   'robot/detection',
-  'robot/status'
+  'robot/status',
+  'robot/motion/status',
+  'robot/motion/event'
 ];
 
 const commandTopics = {
@@ -129,6 +131,20 @@ async function handleMessage(io, topic, payload) {
 
     const event = addEvent('status', text, { topic });
     io.emit('robot:status', { text, receivedAt: now, event });
+    emitState(io);
+    return;
+  }
+
+  if (topic === 'robot/motion/status') {
+    const event = addEvent('status', `motion ${text}`, { topic });
+    io.emit('robot:status', { text: `motion ${text}`, receivedAt: now, event });
+    emitState(io);
+    return;
+  }
+
+  if (topic === 'robot/motion/event') {
+    const event = addEvent('command', `motion ${text}`, { topic });
+    io.emit('robot:event', event);
     emitState(io);
   }
 }

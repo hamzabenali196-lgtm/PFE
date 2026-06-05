@@ -1,4 +1,4 @@
-import { Mic, MicOff, RadioTower, Volume2 } from 'lucide-react';
+import { Mic, MicOff, RadioTower } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -110,22 +110,6 @@ export default function MicPanel({
     return audioContextRef.current;
   }
 
-  async function testSound() {
-    const audioContext = await getAudioContext();
-    if (!audioContext) return;
-
-    const oscillator = audioContext.createOscillator();
-    const gain = audioContext.createGain();
-    oscillator.frequency.value = 720;
-    gain.gain.setValueAtTime(0.0001, audioContext.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.18, audioContext.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.28);
-    oscillator.connect(gain);
-    gain.connect(audioContext.destination);
-    oscillator.start();
-    oscillator.stop(audioContext.currentTime + 0.3);
-  }
-
   return (
     <section className="tool-panel mic-panel">
       <div className="panel-heading">
@@ -149,13 +133,6 @@ export default function MicPanel({
         {enabled ? <MicOff size={18} aria-hidden="true" /> : <Mic size={18} aria-hidden="true" />}
         <span>{enabled ? 'Deactivate mic' : 'Activate mic & monitor'}</span>
       </button>
-
-      <div className="audio-row">
-        <button type="button" onClick={testSound} title="Test browser audio">
-          <Volume2 size={18} aria-hidden="true" />
-          <span>Test sound</span>
-        </button>
-      </div>
 
       <div className="mic-meter" aria-label="Microphone level">
         <span style={{ width: `${Math.round((mic?.level || 0) * 100)}%` }} />

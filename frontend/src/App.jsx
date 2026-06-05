@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Cpu, Server } from 'lucide-react';
+import { Activity, Cpu, ListChecks, Server } from 'lucide-react';
 import { io } from 'socket.io-client';
 import AlertPanel from './components/AlertPanel.jsx';
 import DetectionHistory from './components/DetectionHistory.jsx';
@@ -52,6 +52,7 @@ export default function App() {
   const [robot, setRobot] = useState(initialRobotState);
   const [socketConnected, setSocketConnected] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [eventsOpen, setEventsOpen] = useState(false);
   const [notice, setNotice] = useState('');
   const lastSpokenRef = useRef('');
 
@@ -215,6 +216,10 @@ export default function App() {
     });
   }
 
+  const handleDriveCommand = useCallback(async (command) => {
+    await runAction(() => postRobotCommand(command));
+  }, []);
+
   const handleVoiceCommand = useCallback(async (text) => {
     const normalized = text.toLowerCase();
 
@@ -234,12 +239,12 @@ export default function App() {
     }
 
     if (normalized.includes('gauche') || normalized.includes('left')) {
-      await runAction(() => postServo('oy', 45));
+      await handleDriveCommand('left');
       return;
     }
 
     if (normalized.includes('droite') || normalized.includes('right')) {
-      await runAction(() => postServo('oy', 135));
+      await handleDriveCommand('right');
       return;
     }
 
@@ -257,10 +262,21 @@ export default function App() {
     <div className="app-shell">
       <header className="app-header">
         <div>
-          <p className="eyebrow">Robot Spider</p>
-          <h1>Command Dashboard</h1>
+          <p className="eyebrow">Live operations</p>
+          <h1>Robot Spider Console</h1>
         </div>
         <div className="header-actions">
+          <button
+            type="button"
+            className={eventsOpen ? 'event-toggle active' : 'event-toggle'}
+            onClick={() => setEventsOpen((value) => !value)}
+            aria-expanded={eventsOpen}
+            title="Show recent events"
+          >
+            <ListChecks size={18} aria-hidden="true" />
+            <span>Events</span>
+            <strong>{robot.events?.length || 0}</strong>
+          </button>
           <StatusBadge socketConnected={socketConnected} mqttConnected={robot.mqttConnected} />
         </div>
       </header>
@@ -274,20 +290,23 @@ export default function App() {
       </section>
 
       <main className="dashboard-grid">
-        <LiveCamera
-          frame={robot.liveFrame}
-          frameCount={robot.frameCount}
-          lastFrameAt={robot.lastFrameAt}
-          video={robot.video}
-          onStart={startVideo}
-          onStop={stopVideo}
-        />
+        <div className="primary-stack">
+          <LiveCamera
+            frame={robot.liveFrame}
+            lastFrameAt={robot.lastFrameAt}
+            video={robot.video}
+            onDriveCommand={handleDriveCommand}
+          />
+
+          <LocationPanel location={robot.location} />
+        </div>
 
         <div className="side-stack">
           <ServoControls
             onHome={() => runAction(postRobotHome)}
             onHello={() => runAction(() => postRobotCommand('HELLO'))}
             onServo={(axis, value) => runAction(() => postServo(axis, value))}
+            onDriveCommand={handleDriveCommand}
           />
           <AlertPanel
             alert={robot.lastAlert}
@@ -310,10 +329,9 @@ export default function App() {
           />
           <DetectionHistory history={robot.history} onDelete={removeHistoryItem} />
         </div>
-
-        <LocationPanel location={robot.location} />
-        <EventLog events={robot.events} />
       </main>
+
+      {eventsOpen ? <EventLog events={robot.events} onClose={() => setEventsOpen(false)} /> : null}
     </div>
   );
 }

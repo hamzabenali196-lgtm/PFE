@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,7 +22,7 @@ let currentRecording = null;
 export async function initMic(io) {
   ioRef = io;
   await clearRecordings();
-  robotState.mic.device = config.micDevice;
+  robotState.mic.device = getConfiguredMicLabel();
   robotState.mic.recording = false;
   robotState.recordings = recordings;
 }
@@ -133,8 +133,13 @@ export async function deleteRecording(id) {
 function startMic() {
   if (micProcess) return robotState.mic;
 
+  const resolved = resolveMicDevice();
+  if (resolved.error) {
+    return failMicStart(resolved.error, resolved.device);
+  }
+
   micProcess = spawn('arecord', [
-    '-D', config.micDevice,
+    '-D', resolved.device,
     '-f', 'S16_LE',
     '-r', '16000',
     '-c', '1',
@@ -145,13 +150,13 @@ function startMic() {
 
   robotState.mic = {
     enabled: true,
-    device: config.micDevice,
+    device: resolved.device,
     level: 0,
     error: null,
     recording: Boolean(currentRecording),
     updatedAt: new Date().toISOString()
   };
-  addEvent('status', `USB mic enabled (${config.micDevice})`);
+  addEvent('status', `USB mic enabled (${resolved.device})`);
   emitMic();
 
   micProcess.stdout.on('data', (chunk) => {
@@ -178,6 +183,16 @@ function startMic() {
     emitMic();
   });
 
+  micProcess.on('error', (error) => {
+    micProcess = null;
+    robotState.mic.enabled = false;
+    robotState.mic.level = 0;
+    robotState.mic.error = `Unable to start arecord: ${error.message}`;
+    robotState.mic.updatedAt = new Date().toISOString();
+    addEvent('alert', robotState.mic.error);
+    emitMic();
+  });
+
   micProcess.on('close', (code) => {
     micProcess = null;
     robotState.mic.enabled = false;
@@ -192,6 +207,92 @@ function startMic() {
   });
 
   return robotState.mic;
+}
+
+function failMicStart(message, device = getConfiguredMicLabel()) {
+  robotState.mic = {
+    enabled: false,
+    device,
+    level: 0,
+    error: message,
+    recording: Boolean(currentRecording),
+    updatedAt: new Date().toISOString()
+  };
+  addEvent('alert', message);
+  emitMic();
+  throw new Error(message);
+}
+
+function getConfiguredMicLabel() {
+  return config.micDevice || 'auto';
+}
+
+function resolveMicDevice() {
+  const requestedDevice = getConfiguredMicLabel();
+
+  if (!isAutoMicDevice(requestedDevice)) {
+    const missingCaptureDevice = getMissingCaptureDeviceMessage(requestedDevice);
+    if (missingCaptureDevice) {
+      return { device: requestedDevice, error: missingCaptureDevice };
+    }
+
+    return { device: requestedDevice };
+  }
+
+  const captureDevices = listCaptureDevices();
+  if (captureDevices.error) {
+    return { device: requestedDevice, error: captureDevices.error };
+  }
+
+  const [firstDevice] = captureDevices.devices;
+  if (!firstDevice) {
+    return {
+      device: requestedDevice,
+      error: 'No ALSA capture device found. Connect the USB microphone, then run `arecord -l` to confirm it appears.'
+    };
+  }
+
+  return { device: `plughw:${firstDevice.card},${firstDevice.device}` };
+}
+
+function isAutoMicDevice(device) {
+  return !device || device.toLowerCase() === 'auto';
+}
+
+function getMissingCaptureDeviceMessage(device) {
+  const match = /^(?:plug)?hw:(\d+),(\d+)$/i.exec(device);
+  if (!match) return null;
+
+  const captureDevices = listCaptureDevices();
+  if (captureDevices.error) return captureDevices.error;
+
+  const [, card, captureDevice] = match;
+  const found = captureDevices.devices.some((entry) => (
+    entry.card === card && entry.device === captureDevice
+  ));
+
+  if (found) return null;
+
+  return `ALSA capture device ${device} was not found. Use MIC_DEVICE=auto or set MIC_DEVICE to one of the devices shown by \`arecord -l\`.`;
+}
+
+function listCaptureDevices() {
+  const result = spawnSync('arecord', ['-l'], { encoding: 'utf8' });
+  if (result.error) {
+    return { devices: [], error: `Unable to list ALSA capture devices: ${result.error.message}` };
+  }
+
+  const output = `${result.stdout || ''}\n${result.stderr || ''}`;
+  const devices = [];
+  const pattern = /card\s+(\d+):.+?,\s*device\s+(\d+):/gi;
+  let match = pattern.exec(output);
+
+  while (match) {
+    devices.push({ card: match[1], device: match[2] });
+    match = pattern.exec(output);
+  }
+
+  return { devices };
 }
 
 async function stopMic() {

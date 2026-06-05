@@ -7,7 +7,7 @@ export default function DetectionHistory({ history, onDelete }) {
       <div className="panel-heading">
         <div>
           <p className="eyebrow">Archive</p>
-          <h2>Detection History</h2>
+          <h2>Detections</h2>
         </div>
         <Images size={22} aria-hidden="true" />
       </div>

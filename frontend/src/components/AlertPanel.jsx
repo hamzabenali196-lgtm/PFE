@@ -9,7 +9,7 @@ export default function AlertPanel({ alert, photo, voiceEnabled, onToggleVoice }
       <div className="panel-heading">
         <div>
           <p className="eyebrow">Detection</p>
-          <h2>Latest Alert</h2>
+          <h2>Human Presence</h2>
         </div>
         <Bell size={22} aria-hidden="true" />
       </div>
@@ -24,7 +24,7 @@ export default function AlertPanel({ alert, photo, voiceEnabled, onToggleVoice }
         ) : (
           <div>
             <Camera size={24} aria-hidden="true" />
-            <span>No snapshot</span>
+            <span>No snapshot yet</span>
           </div>
         )}
       </div>

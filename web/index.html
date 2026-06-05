@@ -6,17 +6,19 @@
   <title>Robot Spider Dashboard</title>
   <style>
     :root {
-      color-scheme: dark;
-      --bg: #0d1117;
-      --panel: #151b23;
-      --panel-2: #1c2330;
-      --border: #303a4a;
-      --text: #edf2f7;
-      --muted: #9aa8ba;
-      --green: #2bd576;
-      --red: #ff5c69;
-      --amber: #ffc857;
-      --blue: #5cc8ff;
+      color-scheme: light;
+      --bg: #f6f4ef;
+      --panel: #ffffff;
+      --panel-2: #f8faf9;
+      --border: #d8e0dd;
+      --text: #162126;
+      --muted: #687570;
+      --green: #12845a;
+      --red: #d04a4a;
+      --amber: #ad741f;
+      --blue: #2b6fb3;
+      --teal: #15847f;
+      --shadow: 0 14px 34px rgba(32, 52, 57, .1);
     }
 
     * { box-sizing: border-box; }
@@ -24,7 +26,7 @@
     body {
       margin: 0;
       min-height: 100vh;
-      background: var(--bg);
+      background: linear-gradient(180deg, #eef7f5 0, #fbf7ef 330px, var(--bg) 100%);
       color: var(--text);
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
     }
@@ -37,6 +39,7 @@
       display: grid;
       grid-template-columns: minmax(0, 1fr) 340px;
       gap: 16px;
+      align-items: start;
       min-height: 100vh;
       padding: 16px;
     }
@@ -71,7 +74,8 @@
       border: 1px solid var(--border);
       border-radius: 8px;
       color: var(--muted);
-      background: var(--panel);
+      background: rgba(255, 255, 255, .9);
+      box-shadow: 0 8px 18px rgba(32, 52, 57, .07);
       white-space: nowrap;
     }
 
@@ -90,9 +94,10 @@
       border: 1px solid var(--border);
       border-radius: 8px;
       overflow: hidden;
-      background: #05070a;
-      min-height: 360px;
-      height: calc(100vh - 112px);
+      background: #10171b;
+      min-height: 0;
+      width: 100%;
+      aspect-ratio: var(--video-ratio, 4 / 3);
       display: grid;
       place-items: center;
       position: relative;
@@ -101,7 +106,7 @@
     .stage img {
       width: 100%;
       height: 100%;
-      object-fit: contain;
+      object-fit: cover;
       display: block;
     }
 
@@ -126,6 +131,7 @@
       border-radius: 8px;
       background: var(--panel);
       padding: 14px;
+      box-shadow: var(--shadow);
     }
 
     .metric {
@@ -134,6 +140,7 @@
       padding: 12px;
       border-radius: 8px;
       background: var(--panel-2);
+      border: 1px solid var(--border);
       margin-bottom: 10px;
     }
 
@@ -165,7 +172,7 @@
       object-fit: cover;
       border: 1px solid var(--border);
       border-radius: 8px;
-      background: #05070a;
+      background: #f3f6f5;
     }
 
     .actions {
@@ -178,17 +185,61 @@
       min-height: 42px;
       border: 1px solid var(--border);
       border-radius: 8px;
-      background: var(--panel-2);
+      background: var(--panel);
       color: var(--text);
       text-decoration: none;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
+      box-shadow: 0 8px 18px rgba(32, 52, 57, .07);
     }
 
     .actions button:hover, .actions a:hover {
       border-color: var(--blue);
+      background: #f5fbff;
+      color: #123f68;
+    }
+
+    .drive-actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .drive-actions button {
+      min-height: 48px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--text);
+      display: inline-grid;
+      place-items: center;
+      cursor: pointer;
+      box-shadow: 0 8px 18px rgba(32, 52, 57, .07);
+    }
+
+    .drive-actions button:first-child {
+      grid-column: 2;
+    }
+
+    .drive-actions button:nth-child(2) {
+      grid-column: 1;
+    }
+
+    .drive-actions button:nth-child(3) {
+      grid-column: 2;
+    }
+
+    .drive-actions button:nth-child(4) {
+      grid-column: 3;
+    }
+
+    .drive-actions button:hover,
+    .drive-actions button.active {
+      border-color: rgba(18, 132, 90, .45);
+      background: #effaf5;
+      color: var(--green);
     }
 
     @media (max-width: 900px) {
@@ -197,7 +248,7 @@
       }
 
       .stage {
-        height: 58vh;
+        min-height: 0;
       }
     }
 
@@ -270,6 +321,20 @@
           <button id="speakToggle" type="button" aria-pressed="true">Voice on</button>
         </div>
       </section>
+
+      <section class="panel">
+        <h2>Drive</h2>
+        <div class="drive-actions">
+          <button type="button" data-key="z" data-command="run">Z</button>
+          <button type="button" data-key="q" data-command="left">Q</button>
+          <button type="button" data-key="s" data-command="backward">S</button>
+          <button type="button" data-key="d" data-command="right">D</button>
+        </div>
+        <div class="metric">
+          <span class="label">Last command</span>
+          <span id="commandStatus" class="value">No command sent</span>
+        </div>
+      </section>
     </aside>
   </main>
 
@@ -294,13 +359,18 @@
     const coords = document.getElementById('coords');
     const mapLink = document.getElementById('mapLink');
     const speakToggle = document.getElementById('speakToggle');
+    const driveButtons = [...document.querySelectorAll('.drive-actions button')];
+    const commandStatus = document.getElementById('commandStatus');
 
     let frames = 0;
     let voiceEnabled = true;
+    let activeDriveKey = '';
 
     const brokerHost = location.hostname || 'localhost';
+    const apiProtocol = location.protocol.startsWith('http') ? location.protocol : 'http:';
+    const apiUrl = `${apiProtocol}//${brokerHost}:4000`;
     const wsUrl = `ws://${brokerHost}:9001`;
-    const client = mqtt.connect(wsUrl, { reconnectPeriod: 2000 });
+    const client = window.mqtt ? mqtt.connect(wsUrl, { reconnectPeriod: 2000 }) : null;
 
     function setStatus(state, message) {
       statusBox.className = `status ${state}`;
@@ -319,47 +389,94 @@
       img.src = `data:image/jpeg;base64,${payload.toString()}`;
     }
 
+    frame.addEventListener('load', () => {
+      if (!frame.naturalWidth || !frame.naturalHeight) return;
+      frame.parentElement.style.setProperty(
+        '--video-ratio',
+        `${frame.naturalWidth} / ${frame.naturalHeight}`
+      );
+    });
+
     function speak(text) {
       if (!voiceEnabled || !('speechSynthesis' in window)) return;
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
     }
 
-    client.on('connect', () => {
-      setStatus('connected', `Connected to ${wsUrl}`);
-      topics.forEach((topic) => client.subscribe(topic));
-    });
-
-    client.on('reconnect', () => setStatus('', 'Reconnecting...'));
-    client.on('offline', () => setStatus('offline', 'Offline'));
-    client.on('error', (err) => setStatus('error', `Error: ${err.message || err}`));
-
-    client.on('message', (topic, payload) => {
-      const text = payload.toString();
-
-      if (topic === 'robot/flux') {
-        showBase64Image(frame, payload);
-        empty.style.display = 'none';
-        frames += 1;
-        frameCount.textContent = frames;
-        lastFrame.textContent = nowLabel();
+    async function postRobotCommand(command) {
+      try {
+        const response = await fetch(`${apiUrl}/api/robot/command`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || 'Command failed');
+        commandStatus.textContent = `${command} sent at ${nowLabel()}`;
+        commandStatus.classList.remove('alert');
+      } catch (error) {
+        commandStatus.textContent = `Command failed: ${error.message}`;
+        commandStatus.classList.add('alert');
       }
+    }
 
-      if (topic === 'robot/alerte_vocale' || topic === 'robot/detection') {
-        voiceAlert.textContent = text;
-        voiceAlert.classList.add('alert');
-        speak(text);
-      }
+    async function startDriveCommand(button) {
+      const command = button.dataset.command;
+      if (!command) return;
+      if (activeDriveKey === button.dataset.key) return;
 
-      if (topic === 'robot/photo') {
-        showBase64Image(photo, payload);
-      }
+      activeDriveKey = button.dataset.key;
+      button.classList.add('active');
+      await postRobotCommand(`start:${command}`);
+    }
 
-      if (topic === 'robot/localisation') {
-        coords.textContent = text;
-        mapLink.href = `https://www.google.com/maps?q=${encodeURIComponent(text)}`;
-      }
-    });
+    async function stopDriveCommand(button) {
+      if (activeDriveKey !== button.dataset.key) return;
+
+      activeDriveKey = '';
+      button.classList.remove('active');
+      await postRobotCommand('stand');
+    }
+
+    if (client) {
+      client.on('connect', () => {
+        setStatus('connected', `Connected to ${wsUrl}`);
+        topics.forEach((topic) => client.subscribe(topic));
+      });
+
+      client.on('reconnect', () => setStatus('', 'Reconnecting...'));
+      client.on('offline', () => setStatus('offline', 'Offline'));
+      client.on('error', (err) => setStatus('error', `Error: ${err.message || err}`));
+
+      client.on('message', (topic, payload) => {
+        const text = payload.toString();
+
+        if (topic === 'robot/flux') {
+          showBase64Image(frame, payload);
+          empty.style.display = 'none';
+          frames += 1;
+          frameCount.textContent = frames;
+          lastFrame.textContent = nowLabel();
+        }
+
+        if (topic === 'robot/alerte_vocale' || topic === 'robot/detection') {
+          voiceAlert.textContent = text;
+          voiceAlert.classList.add('alert');
+          speak(text);
+        }
+
+        if (topic === 'robot/photo') {
+          showBase64Image(photo, payload);
+        }
+
+        if (topic === 'robot/localisation') {
+          coords.textContent = text;
+          mapLink.href = `https://www.google.com/maps?q=${encodeURIComponent(text)}`;
+        }
+      });
+    } else {
+      setStatus('offline', 'MQTT browser client unavailable');
+    }
 
     speakToggle.addEventListener('click', () => {
       voiceEnabled = !voiceEnabled;
@@ -367,6 +484,54 @@
       speakToggle.setAttribute('aria-pressed', String(voiceEnabled));
       if (!voiceEnabled && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
+      }
+    });
+
+    driveButtons.forEach((button) => {
+      button.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        button.setPointerCapture?.(event.pointerId);
+        startDriveCommand(button);
+      });
+      button.addEventListener('pointerup', (event) => {
+        event.preventDefault();
+        button.releasePointerCapture?.(event.pointerId);
+        stopDriveCommand(button);
+      });
+      button.addEventListener('pointercancel', (event) => {
+        event.preventDefault();
+        stopDriveCommand(button);
+      });
+      button.addEventListener('pointerleave', (event) => {
+        event.preventDefault();
+        stopDriveCommand(button);
+      });
+    });
+
+    window.addEventListener('keydown', (event) => {
+      if (event.repeat) return;
+
+      const key = event.key.toLowerCase();
+      const button = driveButtons.find((item) => item.dataset.key === key);
+      if (!button) return;
+
+      event.preventDefault();
+      startDriveCommand(button);
+    });
+
+    window.addEventListener('keyup', (event) => {
+      const key = event.key.toLowerCase();
+      const button = driveButtons.find((item) => item.dataset.key === key);
+      if (!button) return;
+
+      event.preventDefault();
+      stopDriveCommand(button);
+    });
+
+    window.addEventListener('blur', () => {
+      const button = driveButtons.find((item) => item.dataset.key === activeDriveKey);
+      if (button) {
+        stopDriveCommand(button);
       }
     });
   </script>

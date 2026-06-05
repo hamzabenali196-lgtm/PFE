@@ -1,14 +1,21 @@
-import { ListChecks } from 'lucide-react';
+import { ListChecks, X } from 'lucide-react';
 
-export default function EventLog({ events }) {
+export default function EventLog({ events, onClose }) {
   return (
     <section className="tool-panel event-panel">
       <div className="panel-heading">
         <div>
           <p className="eyebrow">System</p>
-          <h2>Events</h2>
+          <h2>Recent Events</h2>
         </div>
-        <ListChecks size={22} aria-hidden="true" />
+        <div className="panel-tools">
+          <ListChecks size={22} aria-hidden="true" />
+          {onClose ? (
+            <button type="button" className="icon-button" onClick={onClose} title="Hide events" aria-label="Hide events">
+              <X size={17} aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="event-list">

@@ -9,7 +9,7 @@ export default function VideoRecorder({ video, videos, onStart, onStop, onDelete
       <div className="panel-heading">
         <div>
           <p className="eyebrow">Media</p>
-          <h2>Audio + Video Recording</h2>
+          <h2>Recorder</h2>
         </div>
         <Film size={22} aria-hidden="true" />
       </div>

@@ -14,7 +14,7 @@ export default function LocationPanel({ location }) {
       <div className="panel-heading">
         <div>
           <p className="eyebrow">Localisation</p>
-          <h2>Robot Position</h2>
+          <h2>Position</h2>
         </div>
         <MapPin size={22} aria-hidden="true" />
       </div>
@@ -25,7 +25,7 @@ export default function LocationPanel({ location }) {
         ) : (
           <div className="map-empty">
             <Navigation size={24} aria-hidden="true" />
-            <span>No coordinates</span>
+            <span>No coordinates yet</span>
           </div>
         )}
       </div>

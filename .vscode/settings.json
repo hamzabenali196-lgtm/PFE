@@ -1,0 +1,7 @@
+{
+    "python-envs.defaultEnvManager": "ms-python.python:system",
+    "code-runner.executorMap": {
+        "python": "bash /home/pi/PFE/scripts/run_project.sh"
+    },
+    "code-runner.runInTerminal": true
+}
