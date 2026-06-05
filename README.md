@@ -56,10 +56,10 @@ Backend publishes commands:
 
 Drive controls:
 
-- Press `Z` or `ArrowUp`: publishes `start:run`; release publishes `stand`
-- Press `S` or `ArrowDown`: publishes `start:backward`; release publishes `stand`
-- Press `Q` or `ArrowLeft`: publishes `start:left`; release publishes `stand`
-- Press `D` or `ArrowRight`: publishes `start:right`; release publishes `stand`
+- Press `Z` or `ArrowUp`: publishes `start:left`; release publishes `stand`
+- Press `S` or `ArrowDown`: publishes `start:right`; release publishes `stand`
+- Press `Q` or `ArrowLeft`: publishes `start:run`; release publishes `stand`
+- Press `D` or `ArrowRight`: publishes `start:backward`; release publishes `stand`
 
 ## Quick Start (one-liner)
 

@@ -2,10 +2,10 @@ import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Hand, Home, RotateCcw, Slide
 import { useEffect, useState } from 'react';
 
 const DRIVE_BUTTONS = [
-  { key: 'Z', label: 'Forward', command: 'run', icon: <ArrowUp size={18} aria-hidden="true" /> },
-  { key: 'Q', label: 'Left', command: 'left', icon: <ArrowLeft size={18} aria-hidden="true" /> },
-  { key: 'S', label: 'Backward', command: 'backward', icon: <ArrowDown size={18} aria-hidden="true" /> },
-  { key: 'D', label: 'Right', command: 'right', icon: <ArrowRight size={18} aria-hidden="true" /> }
+  { key: 'Z', label: 'Left', command: 'left', icon: <ArrowUp size={18} aria-hidden="true" /> },
+  { key: 'Q', label: 'Forward', command: 'run', icon: <ArrowLeft size={18} aria-hidden="true" /> },
+  { key: 'S', label: 'Right', command: 'right', icon: <ArrowDown size={18} aria-hidden="true" /> },
+  { key: 'D', label: 'Backward', command: 'backward', icon: <ArrowRight size={18} aria-hidden="true" /> }
 ];
 
 export default function ServoControls({ onHome, onHello, onServo, onDriveCommand }) {
