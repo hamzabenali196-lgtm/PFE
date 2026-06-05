@@ -9,7 +9,7 @@ from lobot_controller import LobotController, LobotServo
 
 CENTER = 1500
 STAND_HEIGHT = 1300
-LEG_UP = 900
+LEG_UP = 700
 HIP_BACK = 1200
 HIP_FRONT = 1800
 STEP_TIME_MS = 600
