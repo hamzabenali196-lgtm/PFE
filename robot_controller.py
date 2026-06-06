@@ -540,16 +540,17 @@ class MovementLibrary:
             right_position=HIP_STEP_BACK,
         )
 
-        # Left/right are restored from the previous saved GitHub gait.
-        left = self.previous_turn_plan(
+        # Radically changed left/right turning to use the smooth tripod gait 
+        # (straight_plan physically rotates the robot due to mirrored servos)
+        left = self.straight_plan(
             name="left",
-            left_position=TURN_HIP_BACK,
-            right_position=TURN_HIP_FRONT,
+            lifted_hip=HIP_FORWARD_TARGET,
+            push_hip=HIP_BACK_TARGET,
         )
-        right = self.previous_turn_plan(
+        right = self.straight_plan(
             name="right",
-            left_position=TURN_HIP_FRONT,
-            right_position=TURN_HIP_BACK,
+            lifted_hip=HIP_BACK_TARGET,
+            push_hip=HIP_FORWARD_TARGET,
         )
 
         return {
