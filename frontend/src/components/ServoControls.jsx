@@ -1,28 +1,15 @@
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Hand, Home, RotateCcw, SlidersHorizontal } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Hand, SlidersHorizontal } from 'lucide-react';
+import { useState } from 'react';
 
 const DRIVE_BUTTONS = [
-  { key: 'Z', label: 'Left', command: 'left', icon: <ArrowUp size={18} aria-hidden="true" /> },
-  { key: 'Q', label: 'Forward', command: 'run', icon: <ArrowLeft size={18} aria-hidden="true" /> },
-  { key: 'S', label: 'Right', command: 'right', icon: <ArrowDown size={18} aria-hidden="true" /> },
-  { key: 'D', label: 'Backward', command: 'backward', icon: <ArrowRight size={18} aria-hidden="true" /> }
+  { key: 'Z', label: 'Forward', command: 'forward', icon: <ArrowUp size={18} aria-hidden="true" /> },
+  { key: 'Q', label: 'Left', command: 'left', icon: <ArrowLeft size={18} aria-hidden="true" /> },
+  { key: 'S', label: 'Backward', command: 'backward', icon: <ArrowDown size={18} aria-hidden="true" /> },
+  { key: 'D', label: 'Right', command: 'right', icon: <ArrowRight size={18} aria-hidden="true" /> }
 ];
 
-export default function ServoControls({ onHome, onHello, onServo, onDriveCommand }) {
-  const [values, setValues] = useState({ oy: 90, oz: 90 });
+export default function ServoControls({ onHello, onDriveCommand }) {
   const [activeDrive, setActiveDrive] = useState('');
-
-  useEffect(() => {
-    setValues({ oy: 90, oz: 90 });
-  }, []);
-
-  function update(axis, value) {
-    setValues((current) => ({ ...current, [axis]: Number(value) }));
-  }
-
-  function commit(axis) {
-    onServo(axis, values[axis]);
-  }
 
   function startDrive(button) {
     setActiveDrive(button.key);
@@ -45,17 +32,9 @@ export default function ServoControls({ onHome, onHello, onServo, onDriveCommand
       </div>
 
       <div className="button-row">
-        <button type="button" className="button-primary" onClick={onHome} title="Rest position" aria-label="Rest position">
-          <Home size={18} aria-hidden="true" />
-          <span>Rest</span>
-        </button>
-        <button type="button" onClick={onHello} title="Saluer" aria-label="Saluer">
+        <button type="button" className="button-primary" onClick={onHello} title="Saluer" aria-label="Saluer">
           <Hand size={18} aria-hidden="true" />
           <span>Wave</span>
-        </button>
-        <button type="button" onClick={() => onServo('oy', 90)} title="Center horizontal rotation" aria-label="Center horizontal rotation">
-          <RotateCcw size={18} aria-hidden="true" />
-          <span>Center</span>
         </button>
       </div>
 
@@ -92,45 +71,6 @@ export default function ServoControls({ onHome, onHello, onServo, onDriveCommand
           </button>
         ))}
       </div>
-
-      <ServoSlider
-        label="Horizontal rotation"
-        axis="oy"
-        value={values.oy}
-        onChange={update}
-        onCommit={commit}
-      />
-      <ServoSlider
-        label="Height extension"
-        axis="oz"
-        value={values.oz}
-        onChange={update}
-        onCommit={commit}
-      />
     </section>
-  );
-}
-
-function ServoSlider({ label, axis, value, onChange, onCommit }) {
-  return (
-    <label className="servo-slider">
-      <span>
-        <strong>{label}</strong>
-        <em>{value} deg</em>
-      </span>
-      <input
-        type="range"
-        min="0"
-        max="180"
-        step="1"
-        value={value}
-        onChange={(event) => onChange(axis, event.target.value)}
-        onPointerUp={() => onCommit(axis)}
-        onKeyUp={(event) => {
-          if (event.key === 'Enter') onCommit(axis);
-        }}
-        onBlur={() => onCommit(axis)}
-      />
-    </label>
   );
 }

@@ -17,7 +17,6 @@ ROBOT_BAUD = 9600
 ROBOT_MOVE_TIME_MS = 250
 ROBOT_STAND_TIME_MS = 120
 ROBOT_STEP_TIME_MS = RUN_STEP_TIME_MS
-ROBOT_STEPS = 1
 
 COMMAND_TOPIC = "robot/command"
 STATUS_TOPIC = "robot/motion/status"
@@ -25,43 +24,25 @@ EVENT_TOPIC = "robot/motion/event"
 
 
 COMMAND_ALIASES = {
-    "z": "left",
-    "forward": "left",
-    "avance": "left",
-    "avancer": "left",
-    "s": "right",
-    "back": "right",
-    "recul": "right",
-    "reculer": "right",
-    "q": "run",
-    "gauche": "run",
-    "d": "backward",
-    "run_backward": "backward",
-    "droite": "backward",
-    "running": "run",
+    "z": "forward",
+    "s": "backward",
+    "q": "left",
+    "d": "right",
     "hello": "hi",
-    "saluer": "hi",
-    "position_repos": "center",
-    "home": "center",
-    "rest": "center",
-    "centre": "center",
-    "look": "hiwonder",
-    "debout": "stand",
 }
 
 DRIVE_COMMANDS = {
-    "run",
+    "forward",
     "backward",
     "left",
     "right",
 }
 
+COMMAND_PREFIXES = ("start:", "press:", "hold:")
+
 ONE_SHOT_COMMANDS = {
     "hi",
-    "center",
     "stand",
-    "hiwonder",
-    "stop",
 }
 
 
@@ -115,22 +96,15 @@ class MotionWorker:
     def handle_pending_commands(self, block: bool) -> None:
         timeout = 0.2 if block else 0
 
-        try:
-            command = self.commands.get(timeout=timeout)
-        except queue.Empty:
-            return
-
-        self.execute(command)
-        self.commands.task_done()
-
         while True:
             try:
-                command = self.commands.get_nowait()
+                command = self.commands.get(timeout=timeout)
             except queue.Empty:
                 return
 
             self.execute(command)
             self.commands.task_done()
+            timeout = 0
 
     def execute(self, command: str) -> None:
         print(f"Executing motion command: {command}")
@@ -144,24 +118,25 @@ class MotionWorker:
             self.active_direction = direction
             self.phase_index = 0
             self.robot.stand(time_ms=ROBOT_STAND_TIME_MS)
-        elif command == "hi":
+            return
+
+        handler = self.one_shot_handlers().get(command)
+        if handler:
             self.active_direction = None
-            self.robot.say_hi(time_ms=ROBOT_MOVE_TIME_MS)
-        elif command == "center":
-            self.active_direction = None
-            self.robot.center_all(time_ms=ROBOT_MOVE_TIME_MS)
-        elif command == "stand":
-            self.active_direction = None
-            self.phase_index = 0
-            self.robot.stand(time_ms=ROBOT_STAND_TIME_MS)
-        elif command == "hiwonder":
-            self.active_direction = None
-            self.robot.hiwonder_look_pose(time_ms=ROBOT_MOVE_TIME_MS)
-        elif command == "stop":
-            self.active_direction = None
-            self.phase_index = 0
-            self.robot.stop()
-            self.robot.stand(time_ms=ROBOT_STAND_TIME_MS)
+            handler()
+
+    def one_shot_handlers(self):
+        return {
+            "hi": self.say_hi,
+            "stand": self.stand,
+        }
+
+    def say_hi(self) -> None:
+        self.robot.say_hi(time_ms=ROBOT_MOVE_TIME_MS)
+
+    def stand(self) -> None:
+        self.phase_index = 0
+        self.robot.stand(time_ms=ROBOT_STAND_TIME_MS)
 
     def publish_status(self, status: str) -> None:
         self.client.publish(STATUS_TOPIC, status)
@@ -184,18 +159,14 @@ class MotionWorker:
 
 
 def normalize_command(value: str) -> str | None:
-    command = value.strip().lower()
-    command = COMMAND_ALIASES.get(command, command)
+    command = alias(value)
     command = command.replace("_", ":")
 
-    if command.startswith(("start:", "press:", "hold:")):
-        direction = command.split(":", 1)[1]
-        direction = COMMAND_ALIASES.get(direction, direction)
+    if command.startswith(COMMAND_PREFIXES):
+        direction = alias(command.split(":", 1)[1])
         if direction in DRIVE_COMMANDS:
             return f"start:{direction}"
         return None
-
-    command = COMMAND_ALIASES.get(command, command)
 
     if command in DRIVE_COMMANDS:
         return f"start:{command}"
@@ -204,6 +175,11 @@ def normalize_command(value: str) -> str | None:
         return command
 
     return None
+
+
+def alias(value: str) -> str:
+    command = value.strip().lower()
+    return COMMAND_ALIASES.get(command, COMMAND_ALIASES.get(command.replace(":", "_"), command))
 
 
 def main() -> None:

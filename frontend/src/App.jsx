@@ -17,8 +17,6 @@ import {
   getRobotState,
   postMicEnabled,
   postRobotCommand,
-  postRobotHome,
-  postServo,
   startVideoRecording,
   stopVideoRecording
 } from './lib/api.js';
@@ -223,18 +221,8 @@ export default function App() {
   const handleVoiceCommand = useCallback(async (text) => {
     const normalized = text.toLowerCase();
 
-    if (normalized.includes('repos') || normalized.includes('home')) {
-      await runAction(postRobotHome);
-      return;
-    }
-
     if (normalized.includes('saluer') || normalized.includes('hello') || normalized.includes('bonjour')) {
       await runAction(() => postRobotCommand('HELLO'));
-      return;
-    }
-
-    if (normalized.includes('centre') || normalized.includes('center')) {
-      await runAction(() => postServo('oy', 90));
       return;
     }
 
@@ -246,15 +234,6 @@ export default function App() {
     if (normalized.includes('droite') || normalized.includes('right')) {
       await handleDriveCommand('right');
       return;
-    }
-
-    if (normalized.includes('haut') || normalized.includes('up')) {
-      await runAction(() => postServo('oz', 135));
-      return;
-    }
-
-    if (normalized.includes('bas') || normalized.includes('down')) {
-      await runAction(() => postServo('oz', 45));
     }
   }, []);
 
@@ -303,9 +282,7 @@ export default function App() {
 
         <div className="side-stack">
           <ServoControls
-            onHome={() => runAction(postRobotHome)}
             onHello={() => runAction(() => postRobotCommand('HELLO'))}
-            onServo={(axis, value) => runAction(() => postServo(axis, value))}
             onDriveCommand={handleDriveCommand}
           />
           <AlertPanel

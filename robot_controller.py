@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Callable, Iterable, Mapping
+from typing import Iterable, Mapping
 
 from lobot_controller import LobotController, LobotServo
 
@@ -19,7 +19,7 @@ MOVE_EXTRA_WAIT_MS = 20
 STEP_TIME_MS = 600
 RUN_STEP_TIME_MS = 300
 
-# Hip travel for walking/running
+# Hip travel for walking
 HIP_NEUTRAL = CENTER
 HIP_STEP_FORWARD = 1750
 HIP_STEP_BACK = 1250
@@ -34,10 +34,6 @@ KNEE_LIFT = 900
 ANKLE_LIFT = 800
 KNEE_GROUND = CENTER
 LEG_UP = KNEE_LIFT
-
-# Hiwonder "look" pose
-HIWONDER_LOOK_POSE_PARAMS = dict(hip=CENTER, knee=500, ankle=500)
-
 
 # ---------------------------------------------------------------------------
 # Robot layout
@@ -86,7 +82,6 @@ RIGHT_LEGS = ("leg_4", "leg_5", "leg_6")
 LEFT_LEG_SET = frozenset(LEFT_LEGS)
 RIGHT_LEG_SET = frozenset(RIGHT_LEGS)
 
-HIWONDER_LOOK_POSE = LegPose(**HIWONDER_LOOK_POSE_PARAMS)
 HIP_FORWARD_TARGET = "forward"
 HIP_BACK_TARGET = "back"
 HIP_NEUTRAL_TARGET = "neutral"
@@ -146,41 +141,6 @@ class PosePhase:
                     poses.get(leg_name),
                     group.pose_for(leg_name, height),
                 )
-
-        return poses
-
-
-@dataclass(frozen=True)
-class TripodPhase:
-    """
-    One simultaneous straight movement.
-
-    The lifting tripod swings to a new hip position while raised.
-    The pushing tripod stays grounded and drives the body with its hips.
-    """
-
-    name: str
-    lifting: tuple[str, ...]
-    pushing: tuple[str, ...]
-    lifted_hip: int
-    push_hip: int
-
-    def poses(self, leg_names: Iterable[str], height: int) -> dict[str, LegPose]:
-        poses: dict[str, LegPose] = {}
-
-        for leg_name in self.lifting:
-            poses[leg_name] = LegPose(
-                hip=self.lifted_hip,
-                knee=KNEE_LIFT,
-                ankle=ANKLE_LIFT,
-            )
-
-        for leg_name in self.pushing:
-            poses[leg_name] = LegPose(
-                hip=self.push_hip,
-                knee=KNEE_GROUND,
-                ankle=height,
-            )
 
         return poses
 
@@ -270,7 +230,7 @@ def _merge_pose(existing: LegPose | None, update: LegPose) -> LegPose:
     )
 
 
-MotionPhase = PosePhase | TripodPhase | TurnPhase | ResetPhase
+MotionPhase = PosePhase | TurnPhase | ResetPhase
 RESET_PHASE = ResetPhase()
 
 
@@ -451,11 +411,7 @@ class MovementLibrary:
 
         return {
             "forward": forward,
-            "walk": forward,
-            "run": forward,
-            "running": forward,
             "backward": backward,
-            "run_backward": backward,
             "left": left,
             "right": right,
         }
@@ -496,7 +452,7 @@ class SpiderRobotController:
     """
     High-level six-legged robot movement controller.
 
-    Public methods stay simple: stand, walk, turn, say_hi, run_phase.
+    Public methods stay simple: stand, move, turn, say_hi, run_phase.
     Motion details live in MovementLibrary and are executed by one path.
     """
 
@@ -553,14 +509,8 @@ class SpiderRobotController:
     # Utility poses
     # ------------------------------------------------------------------
 
-    def center_all(self, time_ms: int = 700) -> None:
-        self.move_all(LegPose(CENTER, CENTER, CENTER), time_ms=time_ms)
-
     def stand(self, time_ms: int = 700, height: int = STAND_HEIGHT) -> None:
         self.move_all(LegPose(HIP_NEUTRAL, KNEE_GROUND, height), time_ms=time_ms)
-
-    def hiwonder_look_pose(self, time_ms: int = 700) -> None:
-        self.move_all(HIWONDER_LOOK_POSE, time_ms=time_ms)
 
     # ------------------------------------------------------------------
     # Expressive actions
@@ -589,7 +539,7 @@ class SpiderRobotController:
     # Locomotion
     # ------------------------------------------------------------------
 
-    def walk_forward(
+    def move_forward(
         self,
         steps: int = 1,
         step_time_ms: int = STEP_TIME_MS,
@@ -597,29 +547,13 @@ class SpiderRobotController:
     ) -> None:
         self._run_plan("forward", steps=steps, time_ms=step_time_ms, height=height)
 
-    def walk_backward(
+    def move_backward(
         self,
         steps: int = 1,
         step_time_ms: int = STEP_TIME_MS,
         height: int = STAND_HEIGHT,
     ) -> None:
         self._run_plan("backward", steps=steps, time_ms=step_time_ms, height=height)
-
-    def run_forward(
-        self,
-        steps: int = 1,
-        step_time_ms: int = RUN_STEP_TIME_MS,
-        height: int = STAND_HEIGHT,
-    ) -> None:
-        self.walk_forward(steps=steps, step_time_ms=step_time_ms, height=height)
-
-    def run_backward(
-        self,
-        steps: int = 1,
-        step_time_ms: int = RUN_STEP_TIME_MS,
-        height: int = STAND_HEIGHT,
-    ) -> None:
-        self.walk_backward(steps=steps, step_time_ms=step_time_ms, height=height)
 
     def turn_left(
         self,
@@ -649,8 +583,8 @@ class SpiderRobotController:
         height: int = STAND_HEIGHT,
     ) -> int:
         """Execute one phase of a movement cycle and return the next phase index."""
-        phases = self._movement_phases(direction, step_time_ms, height)
-        phases[phase_index % len(phases)]()
+        phases = self._plan(direction).streaming_phases()
+        self._execute_phase(phases[phase_index % len(phases)], step_time_ms, height)
         return (phase_index + 1) % len(phases)
 
     # ------------------------------------------------------------------
@@ -677,9 +611,6 @@ class SpiderRobotController:
             valid = ", ".join(self.legs)
             raise ValueError(f"Unknown leg '{leg_name}'. Valid legs: {valid}") from exc
 
-    def _pose_for(self, leg_names: Iterable[str], pose: LegPose) -> dict[str, LegPose]:
-        return {leg_name: pose for leg_name in leg_names}
-
     def _plan(self, direction: str) -> MotionPlan:
         return self.movements.plan(direction)
 
@@ -703,72 +634,6 @@ class SpiderRobotController:
     def _run_plan(self, direction: str, steps: int, time_ms: int, height: int) -> None:
         self._execute_plan(self._plan(direction), steps, time_ms, height)
 
-    def _step_phase(
-        self,
-        lifting: Iterable[str],
-        pushing: Iterable[str],
-        lifted_hip: int,
-        push_hip: int,
-        time_ms: int,
-        height: int,
-    ) -> None:
-        phase = TripodPhase(
-            name="custom_step",
-            lifting=tuple(lifting),
-            pushing=tuple(pushing),
-            lifted_hip=lifted_hip,
-            push_hip=push_hip,
-        )
-        self._execute_phase(phase, time_ms, height)
-
-    def _reset_hips(self, time_ms: int, height: int) -> None:
-        self._execute_phase(RESET_PHASE, time_ms, height)
-
-    def _turn(
-        self,
-        steps: int,
-        left_position: int,
-        right_position: int,
-        step_time_ms: int,
-        height: int,
-    ) -> None:
-        plan = self.movements.turn_plan(
-            name="custom_turn",
-            left_position=left_position,
-            right_position=right_position,
-        )
-        self._execute_plan(plan, steps, step_time_ms, height)
-
-    def _turn_step_phase(
-        self,
-        lifting: Iterable[str],
-        pushing: Iterable[str],
-        left_position: int,
-        right_position: int,
-        time_ms: int,
-        height: int,
-    ) -> None:
-        phase = TurnPhase(
-            name="custom_turn_step",
-            lifting=tuple(lifting),
-            pushing=tuple(pushing),
-            left_position=left_position,
-            right_position=right_position,
-        )
-        self._execute_phase(phase, time_ms, height)
-
-    def _movement_phases(
-        self,
-        direction: str,
-        step_time_ms: int,
-        height: int,
-    ) -> list[Callable[[], None]]:
-        """Return zero-argument actions representing one streaming movement cycle."""
-        return [
-            lambda phase=phase: self._execute_phase(phase, step_time_ms, height)
-            for phase in self._plan(direction).streaming_phases()
-        ]
-
 
 # ---------------------------------------------------------------------------
 # Convenience API
@@ -789,7 +654,7 @@ def create_robot(port: str = "/dev/ttyAMA0", baud: int = 9600) -> SpiderRobotCon
 
 RUN_PORT = "/dev/ttyAMA0"
 RUN_BAUD = 9600
-RUN_ACTION = "walk"  # center | stand | hiwonder | look | hi | walk | run | backward | run_backward | left | right
+RUN_ACTION = "forward"  # stand | hi | forward | backward | left | right
 RUN_LEG = "leg_6"
 RUN_STEPS = 1
 RUN_LOOP = True
@@ -800,35 +665,27 @@ RUN_DELAY_SECONDS = 0.0
 def prepare_action(robot: SpiderRobotController) -> None:
     """Optional warm-up pose before movement actions."""
     action = RUN_ACTION.strip().lower()
-    if action in ("walk", "run", "running", "backward", "run_backward", "left", "right"):
+    if action in ("forward", "backward", "left", "right"):
         robot.stand(time_ms=RUN_MOVE_TIME_MS)
 
 
 def run_action(robot: SpiderRobotController) -> None:
     action = RUN_ACTION.strip().lower()
 
-    if action == "center":
-        robot.center_all(time_ms=RUN_MOVE_TIME_MS)
-    elif action == "stand":
+    if action == "stand":
         robot.stand(time_ms=RUN_MOVE_TIME_MS)
-    elif action in ("hiwonder", "look"):
-        robot.hiwonder_look_pose(time_ms=RUN_MOVE_TIME_MS)
     elif action == "hi":
         robot.say_hi(leg_name=RUN_LEG, time_ms=RUN_MOVE_TIME_MS)
-    elif action == "walk":
-        robot.walk_forward(steps=RUN_STEPS, step_time_ms=RUN_MOVE_TIME_MS)
-    elif action in ("run", "running"):
-        robot.run_forward(steps=RUN_STEPS, step_time_ms=RUN_MOVE_TIME_MS)
+    elif action == "forward":
+        robot.move_forward(steps=RUN_STEPS, step_time_ms=RUN_MOVE_TIME_MS)
     elif action == "backward":
-        robot.walk_backward(steps=RUN_STEPS, step_time_ms=RUN_MOVE_TIME_MS)
-    elif action == "run_backward":
-        robot.run_backward(steps=RUN_STEPS, step_time_ms=RUN_MOVE_TIME_MS)
+        robot.move_backward(steps=RUN_STEPS, step_time_ms=RUN_MOVE_TIME_MS)
     elif action == "left":
         robot.turn_left(steps=RUN_STEPS, step_time_ms=RUN_MOVE_TIME_MS)
     elif action == "right":
         robot.turn_right(steps=RUN_STEPS, step_time_ms=RUN_MOVE_TIME_MS)
     else:
-        valid = "center, stand, hiwonder, look, hi, walk, run, backward, run_backward, left, right"
+        valid = "stand, hi, forward, backward, left, right"
         raise ValueError(f"Unknown RUN_ACTION '{RUN_ACTION}'. Use one of: {valid}")
 
 

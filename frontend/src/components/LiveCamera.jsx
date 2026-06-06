@@ -2,10 +2,10 @@ import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Camera, Clock3, Expand, Mini
 import { useEffect, useRef, useState } from 'react';
 
 const DRIVE_CONTROLS = {
-  Z: { label: 'Left', command: 'left', icon: <ArrowUp size={14} aria-hidden="true" /> },
-  Q: { label: 'Forward', command: 'run', icon: <ArrowLeft size={14} aria-hidden="true" /> },
-  S: { label: 'Right', command: 'right', icon: <ArrowDown size={14} aria-hidden="true" /> },
-  D: { label: 'Backward', command: 'backward', icon: <ArrowRight size={14} aria-hidden="true" /> }
+  Z: { label: 'Forward', command: 'forward', icon: <ArrowUp size={14} aria-hidden="true" /> },
+  Q: { label: 'Left', command: 'left', icon: <ArrowLeft size={14} aria-hidden="true" /> },
+  S: { label: 'Backward', command: 'backward', icon: <ArrowDown size={14} aria-hidden="true" /> },
+  D: { label: 'Right', command: 'right', icon: <ArrowRight size={14} aria-hidden="true" /> }
 };
 
 const ARROW_TO_CONTROL = {

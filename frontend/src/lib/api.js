@@ -12,14 +12,6 @@ export async function postRobotCommand(command) {
   return postJson('/api/robot/command', { command });
 }
 
-export async function postRobotHome() {
-  return postJson('/api/robot/home', {});
-}
-
-export async function postServo(axis, value) {
-  return postJson('/api/robot/servo', { axis, value });
-}
-
 export async function deleteHistoryItem(id) {
   const response = await fetch(`${API_URL}/api/robot/history/${id}`, {
     method: 'DELETE'
