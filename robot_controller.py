@@ -35,6 +35,11 @@ ANKLE_LIFT = 800
 KNEE_GROUND = CENTER
 LEG_UP = KNEE_LIFT
 
+# Left/right turn values restored from the previous saved GitHub gait.
+TURN_HIP_BACK = 1200
+TURN_HIP_FRONT = 1800
+TURN_LEG_UP = 700
+
 # Hiwonder "look" pose
 HIWONDER_LOOK_POSE_PARAMS = dict(hip=CENTER, knee=500, ankle=500)
 
@@ -146,6 +151,29 @@ class PosePhase:
                     poses.get(leg_name),
                     group.pose_for(leg_name, height),
                 )
+
+        return poses
+
+
+@dataclass(frozen=True)
+class SideHipPhase:
+    """Old left/right turn swing: move only selected hips by robot side."""
+
+    name: str
+    legs: tuple[str, ...]
+    left_position: int
+    right_position: int
+
+    def poses(self, leg_names: Iterable[str], height: int) -> dict[str, LegPose]:
+        poses: dict[str, LegPose] = {}
+
+        for leg_name in self.legs:
+            if leg_name in LEFT_LEG_SET:
+                poses[leg_name] = LegPose(hip=self.left_position)
+            elif leg_name in RIGHT_LEG_SET:
+                poses[leg_name] = LegPose(hip=self.right_position)
+            else:
+                poses[leg_name] = LegPose(hip=HIP_NEUTRAL)
 
         return poses
 
@@ -270,7 +298,7 @@ def _merge_pose(existing: LegPose | None, update: LegPose) -> LegPose:
     )
 
 
-MotionPhase = PosePhase | TripodPhase | TurnPhase | ResetPhase
+MotionPhase = PosePhase | SideHipPhase | TripodPhase | TurnPhase | ResetPhase
 RESET_PHASE = ResetPhase()
 
 
@@ -427,26 +455,101 @@ class MovementLibrary:
             ),
         )
 
+    def previous_turn_plan(self, name: str, left_position: int, right_position: int) -> MotionPlan:
+        return MotionPlan(
+            name=name,
+            phases=(
+                PosePhase(
+                    name=f"{name}:lift_a",
+                    groups=(
+                        GroupPose(
+                            legs=self.tripod_a,
+                            knee=TURN_LEG_UP,
+                            ankle=TURN_LEG_UP,
+                        ),
+                    ),
+                ),
+                SideHipPhase(
+                    name=f"{name}:swing_a",
+                    legs=self.tripod_a,
+                    left_position=left_position,
+                    right_position=right_position,
+                ),
+                PosePhase(
+                    name=f"{name}:lower_a",
+                    groups=(
+                        GroupPose(
+                            legs=self.tripod_a,
+                            knee=KNEE_GROUND,
+                            use_ground_height=True,
+                        ),
+                    ),
+                ),
+                PosePhase(
+                    name=f"{name}:lift_b",
+                    groups=(
+                        GroupPose(
+                            legs=self.tripod_b,
+                            knee=TURN_LEG_UP,
+                            ankle=TURN_LEG_UP,
+                        ),
+                    ),
+                ),
+                SideHipPhase(
+                    name=f"{name}:swing_b",
+                    legs=self.tripod_b,
+                    left_position=left_position,
+                    right_position=right_position,
+                ),
+                PosePhase(
+                    name=f"{name}:lower_b",
+                    groups=(
+                        GroupPose(
+                            legs=self.tripod_b,
+                            knee=KNEE_GROUND,
+                            use_ground_height=True,
+                        ),
+                    ),
+                ),
+            ),
+            reset_after_complete=False,
+        )
+
     def _build_plans(self) -> dict[str, MotionPlan]:
-        forward = self.straight_plan(
-            name="forward",
+        tripod_forward = self.straight_plan(
+            name="tripod_forward",
             lifted_hip=HIP_FORWARD_TARGET,
             push_hip=HIP_BACK_TARGET,
         )
-        backward = self.straight_plan(
-            name="backward",
+        tripod_backward = self.straight_plan(
+            name="tripod_backward",
             lifted_hip=HIP_BACK_TARGET,
             push_hip=HIP_FORWARD_TARGET,
         )
-        left = self.turn_plan(
-            name="left",
+
+        # The current left/right movement is the one that physically drives
+        # forward/backward on this robot, so expose that behavior as drive.
+        forward = self.turn_plan(
+            name="forward",
             left_position=HIP_STEP_BACK,
             right_position=HIP_STEP_FORWARD,
         )
-        right = self.turn_plan(
-            name="right",
+        backward = self.turn_plan(
+            name="backward",
             left_position=HIP_STEP_FORWARD,
             right_position=HIP_STEP_BACK,
+        )
+
+        # Left/right are restored from the previous saved GitHub gait.
+        left = self.previous_turn_plan(
+            name="left",
+            left_position=TURN_HIP_BACK,
+            right_position=TURN_HIP_FRONT,
+        )
+        right = self.previous_turn_plan(
+            name="right",
+            left_position=TURN_HIP_FRONT,
+            right_position=TURN_HIP_BACK,
         )
 
         return {
@@ -458,6 +561,8 @@ class MovementLibrary:
             "run_backward": backward,
             "left": left,
             "right": right,
+            "tripod_forward": tripod_forward,
+            "tripod_backward": tripod_backward,
         }
 
 
@@ -732,7 +837,7 @@ class SpiderRobotController:
         step_time_ms: int,
         height: int,
     ) -> None:
-        plan = self.movements.turn_plan(
+        plan = self.movements.previous_turn_plan(
             name="custom_turn",
             left_position=left_position,
             right_position=right_position,
