@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Bot, Cpu, ListChecks, Server } from 'lucide-react';
+import { Activity, Bot, Cpu, Server } from 'lucide-react';
 import { io } from 'socket.io-client';
 import AlertPanel from './components/AlertPanel.jsx';
 import DetectionHistory from './components/DetectionHistory.jsx';
-import EventLog from './components/EventLog.jsx';
 import LiveCamera from './components/LiveCamera.jsx';
 import LocationPanel from './components/LocationPanel.jsx';
 import MicPanel from './components/MicPanel.jsx';
@@ -29,9 +28,7 @@ const initialRobotState = {
   location: null,
   frameCount: 0,
   lastFrameAt: null,
-  events: [],
   history: [],
-  recordings: [],
   videoRecordings: [],
   video: {
     recording: false,
@@ -50,7 +47,6 @@ export default function App() {
   const [robot, setRobot] = useState(initialRobotState);
   const [socketConnected, setSocketConnected] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [eventsOpen, setEventsOpen] = useState(false);
   const [notice, setNotice] = useState('');
   const lastSpokenRef = useRef('');
 
@@ -87,10 +83,6 @@ export default function App() {
       setRobot((current) => ({ ...current, mic }));
     });
 
-    socket.on('robot:recordings', (recordings) => {
-      setRobot((current) => ({ ...current, recordings }));
-    });
-
     socket.on('robot:video', (video) => {
       setRobot((current) => ({ ...current, video }));
     });
@@ -107,8 +99,7 @@ export default function App() {
       setRobot((current) => ({
         ...current,
         lastAlert: alert,
-        lastAlertAt: alert.receivedAt,
-        events: alert.event ? [alert.event, ...(current.events || [])].slice(0, 50) : current.events
+        lastAlertAt: alert.receivedAt
       }));
     });
 
@@ -121,21 +112,6 @@ export default function App() {
 
     socket.on('robot:history:clear', () => {
       setRobot((current) => ({ ...current, history: [] }));
-    });
-
-    socket.on('robot:status', ({ event }) => {
-      if (!event) return;
-      setRobot((current) => ({
-        ...current,
-        events: [event, ...(current.events || [])].slice(0, 50)
-      }));
-    });
-
-    socket.on('robot:event', (event) => {
-      setRobot((current) => ({
-        ...current,
-        events: [event, ...(current.events || [])].slice(0, 50)
-      }));
     });
 
     socket.on('robot:error', ({ message }) => setNotice(message));
@@ -249,28 +225,15 @@ export default function App() {
             <h1>Spider Robot</h1>
           </div>
         </div>
-        <div className="header-actions">
-          <button
-            type="button"
-            className={eventsOpen ? 'event-toggle active' : 'event-toggle'}
-            onClick={() => setEventsOpen((value) => !value)}
-            aria-expanded={eventsOpen}
-            title="Show recent events"
-          >
-            <ListChecks size={16} aria-hidden="true" />
-            <span>Events</span>
-            <strong>{robot.events?.length || 0}</strong>
-          </button>
-          <StatusBadge socketConnected={socketConnected} mqttConnected={robot.mqttConnected} />
-        </div>
+        <StatusBadge socketConnected={socketConnected} mqttConnected={robot.mqttConnected} />
       </header>
 
       {notice ? <div className="notice">{notice}</div> : null}
 
       <section className="summary-grid">
-        <SummaryMetric icon={<Server size={20} />} label="Backend" value={socketConnected ? 'Connected' : 'Offline'} />
-        <SummaryMetric icon={<Cpu size={20} />} label="MQTT" value={robot.mqttConnected ? 'Connected' : 'Offline'} />
-        <SummaryMetric icon={<Activity size={20} />} label="Frames" value={String(robot.frameCount || 0)} />
+        <SummaryMetric icon={<Server size={18} />} label="Backend" value={socketConnected ? 'Connected' : 'Offline'} ok={socketConnected} />
+        <SummaryMetric icon={<Cpu size={18} />} label="MQTT" value={robot.mqttConnected ? 'Connected' : 'Offline'} ok={robot.mqttConnected} />
+        <SummaryMetric icon={<Activity size={18} />} label="Frames" value={String(robot.frameCount || 0)} />
       </section>
 
       <main className="dashboard-grid">
@@ -281,7 +244,6 @@ export default function App() {
             video={robot.video}
             onDriveCommand={handleDriveCommand}
           />
-
           <LocationPanel location={robot.location} />
         </div>
 
@@ -312,16 +274,14 @@ export default function App() {
           <DetectionHistory history={robot.history} onDelete={removeHistoryItem} />
         </div>
       </main>
-
-      {eventsOpen ? <EventLog events={robot.events} onClose={() => setEventsOpen(false)} /> : null}
     </div>
   );
 }
 
-function SummaryMetric({ icon, label, value }) {
+function SummaryMetric({ icon, label, value, ok }) {
   return (
     <div className="summary-metric">
-      <span className="summary-icon">{icon}</span>
+      <span className={`summary-icon${ok === true ? ' ok' : ok === false ? ' off' : ''}`}>{icon}</span>
       <span>
         <em>{label}</em>
         <strong>{value}</strong>
