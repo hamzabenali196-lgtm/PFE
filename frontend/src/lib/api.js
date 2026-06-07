@@ -26,24 +26,6 @@ export async function postMicEnabled(enabled) {
   return postJson('/api/robot/mic', { enabled });
 }
 
-export async function startMicRecording() {
-  return postJson('/api/robot/recordings/start', {});
-}
-
-export async function stopMicRecording() {
-  return postJson('/api/robot/recordings/stop', {});
-}
-
-export async function deleteMicRecording(id) {
-  const response = await fetch(`${API_URL}/api/robot/recordings/${id}`, {
-    method: 'DELETE'
-  });
-
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || 'Delete failed');
-  return payload;
-}
-
 export async function startVideoRecording() {
   return postJson('/api/robot/videos/start', {});
 }

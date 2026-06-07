@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Cpu, ListChecks, Server } from 'lucide-react';
+import { Activity, Bot, Cpu, ListChecks, Server } from 'lucide-react';
 import { io } from 'socket.io-client';
 import AlertPanel from './components/AlertPanel.jsx';
 import DetectionHistory from './components/DetectionHistory.jsx';
@@ -240,9 +240,14 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <div>
-          <p className="eyebrow">Live operations</p>
-          <h1>Robot Spider Console</h1>
+        <div className="header-brand">
+          <div className="header-logo">
+            <Bot size={22} aria-hidden="true" />
+          </div>
+          <div>
+            <p className="eyebrow">Master&apos;s Project</p>
+            <h1>Spider Robot</h1>
+          </div>
         </div>
         <div className="header-actions">
           <button
@@ -252,7 +257,7 @@ export default function App() {
             aria-expanded={eventsOpen}
             title="Show recent events"
           >
-            <ListChecks size={18} aria-hidden="true" />
+            <ListChecks size={16} aria-hidden="true" />
             <span>Events</span>
             <strong>{robot.events?.length || 0}</strong>
           </button>
