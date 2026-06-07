@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Bot, Cpu, Server } from 'lucide-react';
+import { Bot, Cpu, Server } from 'lucide-react';
 import { io } from 'socket.io-client';
 import AlertPanel from './components/AlertPanel.jsx';
 import DetectionHistory from './components/DetectionHistory.jsx';
@@ -225,16 +225,14 @@ export default function App() {
             <h1>Spider Robot</h1>
           </div>
         </div>
-        <StatusBadge socketConnected={socketConnected} mqttConnected={robot.mqttConnected} />
+        <div className="header-status">
+          <ConnectionPill icon={<Server size={14} />} label="Backend" connected={socketConnected} />
+          <ConnectionPill icon={<Cpu size={14} />} label="MQTT" connected={robot.mqttConnected} />
+          <StatusBadge socketConnected={socketConnected} mqttConnected={robot.mqttConnected} />
+        </div>
       </header>
 
       {notice ? <div className="notice">{notice}</div> : null}
-
-      <section className="summary-grid">
-        <SummaryMetric icon={<Server size={18} />} label="Backend" value={socketConnected ? 'Connected' : 'Offline'} ok={socketConnected} />
-        <SummaryMetric icon={<Cpu size={18} />} label="MQTT" value={robot.mqttConnected ? 'Connected' : 'Offline'} ok={robot.mqttConnected} />
-        <SummaryMetric icon={<Activity size={18} />} label="Frames" value={String(robot.frameCount || 0)} />
-      </section>
 
       <main className="dashboard-grid">
         <div className="primary-stack">
@@ -278,14 +276,12 @@ export default function App() {
   );
 }
 
-function SummaryMetric({ icon, label, value, ok }) {
+function ConnectionPill({ icon, label, connected }) {
   return (
-    <div className="summary-metric">
-      <span className={`summary-icon${ok === true ? ' ok' : ok === false ? ' off' : ''}`}>{icon}</span>
-      <span>
-        <em>{label}</em>
-        <strong>{value}</strong>
-      </span>
+    <div className={`connection-pill${connected ? ' online' : ' offline'}`}>
+      {icon}
+      <span>{label}</span>
+      <strong>{connected ? 'Connected' : 'Offline'}</strong>
     </div>
   );
 }

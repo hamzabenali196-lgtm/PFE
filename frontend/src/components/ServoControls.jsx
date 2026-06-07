@@ -67,7 +67,7 @@ export default function ServoControls({ onHello, onDriveCommand }) {
             aria-pressed={activeDrive === button.key}
           >
             {button.icon}
-            <strong>{button.key}</strong>
+            <span>{button.label}</span>
           </button>
         ))}
       </div>

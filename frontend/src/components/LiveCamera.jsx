@@ -260,7 +260,6 @@ function DriveButton({ code, label, icon, active, onStart, onStop }) {
       aria-pressed={active}
     >
       {icon}
-      <strong>{code}</strong>
     </button>
   );
 }

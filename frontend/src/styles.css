@@ -119,6 +119,54 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   text-transform: uppercase;
 }
 
+/* ── Header status group ── */
+.header-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── Connection pills ── */
+.connection-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 20px;
+  border: 1px solid var(--line-strong);
+  background: var(--panel-2);
+  font-size: .78rem;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.connection-pill span {
+  color: var(--muted);
+}
+
+.connection-pill strong {
+  font-weight: 700;
+}
+
+.connection-pill.online {
+  border-color: var(--green-border);
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.connection-pill.online span { color: var(--green); }
+
+.connection-pill.offline {
+  border-color: var(--red-border);
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.connection-pill.offline span { color: var(--red); }
+
 /* ── Status badge ── */
 .status-badge {
   min-height: 36px;
@@ -157,67 +205,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   background: var(--red-bg);
   color: var(--red);
   font-size: .875rem;
-}
-
-/* ── Summary metrics ── */
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 16px;
-}
-
-.summary-metric {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--panel);
-  padding: 12px 14px;
-  box-shadow: var(--shadow-sm);
-}
-
-.summary-icon {
-  width: 36px;
-  height: 36px;
-  display: inline-grid;
-  place-items: center;
-  border-radius: 8px;
-  background: var(--blue-bg);
-  color: var(--blue);
-  flex: 0 0 auto;
-}
-
-.summary-icon.ok {
-  background: var(--green-bg);
-  color: var(--green);
-}
-
-.summary-icon.off {
-  background: var(--red-bg);
-  color: var(--red);
-}
-
-.summary-metric span:last-child {
-  min-width: 0;
-  display: grid;
-  gap: 1px;
-}
-
-.summary-metric em {
-  color: var(--muted);
-  font-size: .7rem;
-  font-style: normal;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-weight: 600;
-}
-
-.summary-metric strong {
-  color: var(--text);
-  font-size: .95rem;
-  font-weight: 600;
 }
 
 /* ── Dashboard ── */
@@ -443,15 +430,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .drive-command-pad button {
   min-height: 52px;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   font-size: .78rem;
   font-weight: 600;
-}
-
-.drive-command-pad button strong {
-  font-size: .62rem;
-  color: var(--muted);
-  font-weight: 500;
 }
 
 .drive-command-pad button:first-child { grid-column: 2; }
