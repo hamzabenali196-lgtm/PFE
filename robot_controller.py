@@ -146,55 +146,6 @@ class PosePhase:
 
 
 @dataclass(frozen=True)
-class TurnPhase:
-    """
-    One simultaneous turning movement.
-
-    Left and right side hips move in opposite directions. The lifted tripod
-    swings, while the grounded tripod applies the mirrored pressure.
-    """
-
-    name: str
-    lifting: tuple[str, ...]
-    pushing: tuple[str, ...]
-    left_position: int
-    right_position: int
-
-    def poses(self, leg_names: Iterable[str], height: int) -> dict[str, LegPose]:
-        poses: dict[str, LegPose] = {}
-
-        for leg_name in self.lifting:
-            poses[leg_name] = LegPose(
-                hip=self._lifted_hip(leg_name),
-                knee=KNEE_LIFT,
-                ankle=ANKLE_LIFT,
-            )
-
-        for leg_name in self.pushing:
-            poses[leg_name] = LegPose(
-                hip=self._pushing_hip(leg_name),
-                knee=KNEE_GROUND,
-                ankle=height,
-            )
-
-        return poses
-
-    def _lifted_hip(self, leg_name: str) -> int:
-        if leg_name in LEFT_LEG_SET:
-            return self.left_position
-        if leg_name in RIGHT_LEG_SET:
-            return self.right_position
-        return HIP_NEUTRAL
-
-    def _pushing_hip(self, leg_name: str) -> int:
-        if leg_name in LEFT_LEG_SET:
-            return self.right_position
-        if leg_name in RIGHT_LEG_SET:
-            return self.left_position
-        return HIP_NEUTRAL
-
-
-@dataclass(frozen=True)
 class ResetPhase:
     """Ground every leg and return all hips to neutral."""
 
@@ -230,7 +181,7 @@ def _merge_pose(existing: LegPose | None, update: LegPose) -> LegPose:
     )
 
 
-MotionPhase = PosePhase | TurnPhase | ResetPhase
+MotionPhase = PosePhase | ResetPhase
 RESET_PHASE = ResetPhase()
 
 
@@ -366,23 +317,97 @@ class MovementLibrary:
             ),
         )
 
-    def turn_plan(self, name: str, left_position: int, right_position: int) -> MotionPlan:
+    def turn_plan(self, name: str, swing_hip: int, push_hip: int) -> MotionPlan:
         return MotionPlan(
             name=name,
             phases=(
-                TurnPhase(
-                    name=f"{name}:tripod_a",
-                    lifting=self.tripod_a,
-                    pushing=self.tripod_b,
-                    left_position=left_position,
-                    right_position=right_position,
+                PosePhase(
+                    name=f"{name}:lift_a",
+                    groups=(
+                        GroupPose(
+                            legs=self.tripod_a,
+                            knee=KNEE_LIFT,
+                            ankle=ANKLE_LIFT,
+                        ),
+                    ),
                 ),
-                TurnPhase(
-                    name=f"{name}:tripod_b",
-                    lifting=self.tripod_b,
-                    pushing=self.tripod_a,
-                    left_position=left_position,
-                    right_position=right_position,
+                PosePhase(
+                    name=f"{name}:swing_a_push_b",
+                    groups=(
+                        GroupPose(
+                            legs=self.tripod_a,
+                            hip=swing_hip,
+                            knee=KNEE_LIFT,
+                            ankle=ANKLE_LIFT,
+                        ),
+                        GroupPose(
+                            legs=self.tripod_b,
+                            hip=push_hip,
+                            knee=KNEE_GROUND,
+                            use_ground_height=True,
+                        ),
+                    ),
+                ),
+                PosePhase(
+                    name=f"{name}:plant_a",
+                    groups=(
+                        GroupPose(
+                            legs=self.tripod_a,
+                            hip=swing_hip,
+                            knee=KNEE_GROUND,
+                            use_ground_height=True,
+                        ),
+                        GroupPose(
+                            legs=self.tripod_b,
+                            hip=push_hip,
+                            knee=KNEE_GROUND,
+                            use_ground_height=True,
+                        ),
+                    ),
+                ),
+                PosePhase(
+                    name=f"{name}:lift_b",
+                    groups=(
+                        GroupPose(
+                            legs=self.tripod_b,
+                            knee=KNEE_LIFT,
+                            ankle=ANKLE_LIFT,
+                        ),
+                    ),
+                ),
+                PosePhase(
+                    name=f"{name}:swing_b_push_a",
+                    groups=(
+                        GroupPose(
+                            legs=self.tripod_b,
+                            hip=swing_hip,
+                            knee=KNEE_LIFT,
+                            ankle=ANKLE_LIFT,
+                        ),
+                        GroupPose(
+                            legs=self.tripod_a,
+                            hip=push_hip,
+                            knee=KNEE_GROUND,
+                            use_ground_height=True,
+                        ),
+                    ),
+                ),
+                PosePhase(
+                    name=f"{name}:plant_b",
+                    groups=(
+                        GroupPose(
+                            legs=self.tripod_b,
+                            hip=swing_hip,
+                            knee=KNEE_GROUND,
+                            use_ground_height=True,
+                        ),
+                        GroupPose(
+                            legs=self.tripod_a,
+                            hip=push_hip,
+                            knee=KNEE_GROUND,
+                            use_ground_height=True,
+                        ),
+                    ),
                 ),
             ),
         )
@@ -398,16 +423,8 @@ class MovementLibrary:
             lifted_hip=HIP_BACK_TARGET,
             push_hip=HIP_FORWARD_TARGET,
         )
-        left = self.turn_plan(
-            name="left",
-            left_position=HIP_STEP_BACK,
-            right_position=HIP_STEP_FORWARD,
-        )
-        right = self.turn_plan(
-            name="right",
-            left_position=HIP_STEP_FORWARD,
-            right_position=HIP_STEP_BACK,
-        )
+        left = self.turn_plan(name="left", swing_hip=HIP_STEP_FORWARD, push_hip=HIP_STEP_BACK)
+        right = self.turn_plan(name="right", swing_hip=HIP_STEP_BACK, push_hip=HIP_STEP_FORWARD)
 
         return {
             "forward": forward,
