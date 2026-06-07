@@ -396,57 +396,107 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   color: #4ade80;
 }
 
-/* ── ServoControls ── */
-.button-row {
-  margin-bottom: 12px;
+/* ── D-pad controls ── */
+.dpad-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 0 2px;
 }
 
-.button-row button {
-  width: 100%;
+.dpad {
+  display: grid;
+  grid-template-areas:
+    ".       forward  ."
+    "left    .        right"
+    ".       backward .";
+  grid-template-columns: repeat(3, 72px);
+  grid-template-rows: repeat(3, 72px);
+  gap: 6px;
+  position: relative;
+  /* prevent any text selection across the whole pad */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.dpad-center {
+  grid-area: 2 / 2;
+  border-radius: 50%;
+  background: var(--line);
+  pointer-events: none;
+}
+
+.dpad-btn {
+  /* reset */
+  border: none;
+  padding: 0;
+  margin: 0;
+  min-height: unset;
+  box-shadow: none;
+  /* layout */
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  /* look */
+  background: var(--panel-2);
+  border: 1.5px solid var(--line-strong);
+  color: var(--soft);
+  /* touch */
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  cursor: pointer;
+  transition: background .1s, border-color .1s, color .1s, transform .08s, box-shadow .1s;
+}
+
+.dpad-btn:hover {
+  border-color: var(--blue);
   background: var(--blue-bg);
-  border-color: var(--blue-border);
+  color: var(--blue);
+}
+
+.dpad-btn:active,
+.dpad-btn--active {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+  transform: scale(.93);
+  box-shadow: 0 2px 12px rgba(37, 99, 235, .35);
+}
+
+.wave-btn {
+  width: 100%;
+  min-height: 44px;
+  background: var(--blue-bg);
+  border: 1.5px solid var(--blue-border);
   color: var(--blue);
   font-weight: 600;
+  font-size: .88rem;
+  border-radius: var(--radius);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
-.button-row button:hover {
+.wave-btn:hover {
   background: #dbeafe;
   border-color: var(--blue);
 }
 
-.button-primary {
-  background: var(--blue-bg) !important;
-  border-color: var(--blue-border) !important;
-  color: var(--blue) !important;
+@media (max-width: 480px) {
+  .dpad {
+    grid-template-columns: repeat(3, 80px);
+    grid-template-rows: repeat(3, 80px);
+    gap: 8px;
+  }
+
+  .dpad-btn { width: 80px; height: 80px; border-radius: 16px; }
 }
-
-.drive-command-pad {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-  margin-bottom: 12px;
-}
-
-.drive-command-pad button {
-  min-height: 52px;
-  flex-direction: column;
-  gap: 4px;
-  font-size: .78rem;
-  font-weight: 600;
-}
-
-.drive-command-pad button:first-child { grid-column: 2; }
-.drive-command-pad button:nth-child(2) { grid-column: 1; }
-.drive-command-pad button:nth-child(3) { grid-column: 2; }
-.drive-command-pad button:nth-child(4) { grid-column: 3; }
-
-.drive-command-pad button.active {
-  border-color: var(--green-border);
-  background: var(--green-bg);
-  color: var(--green);
-}
-
-.drive-command-pad button.active strong { color: var(--green); }
 
 /* ── Alert panel ── */
 .alert-message {

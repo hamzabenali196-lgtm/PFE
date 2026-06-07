@@ -248,6 +248,7 @@ export default function App() {
         <div className="side-stack">
           <ServoControls
             onHello={() => runAction(() => postRobotCommand('HELLO'))}
+            onDriveCommand={handleDriveCommand}
           />
           <AlertPanel
             alert={robot.lastAlert}
