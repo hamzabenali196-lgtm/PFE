@@ -34,7 +34,6 @@ KNEE_LIFT = 900
 ANKLE_LIFT = 800
 KNEE_GROUND = CENTER
 LEG_UP = KNEE_LIFT
-
 # ---------------------------------------------------------------------------
 # Robot layout
 # ---------------------------------------------------------------------------
@@ -526,8 +525,8 @@ class SpiderRobotController:
     # Utility poses
     # ------------------------------------------------------------------
 
-    def stand(self, time_ms: int = 700, height: int = STAND_HEIGHT) -> None:
-        self.move_all(LegPose(HIP_NEUTRAL, KNEE_GROUND, height), time_ms=time_ms)
+    def stand(self, time_ms: int = 700, height: int = STAND_HEIGHT, ground_knee: int = KNEE_GROUND) -> None:
+        self.move_all(LegPose(HIP_NEUTRAL, ground_knee, height), time_ms=time_ms)
 
     # ------------------------------------------------------------------
     # Expressive actions
@@ -551,6 +550,45 @@ class SpiderRobotController:
             LegPose(HIP_NEUTRAL, KNEE_GROUND, STAND_HEIGHT),
             time_ms=time_ms,
         )
+
+    def bow(self, time_ms: int = 600, hold_ms: int = 800) -> None:
+        """Front legs lower the body, rear legs rise — a dramatic forward bow."""
+        self.stand(time_ms=time_ms)
+        front = {n: LegPose(HIP_NEUTRAL, KNEE_GROUND, 1700) for n in ("leg_1", "leg_2", "leg_3")}
+        rear  = {n: LegPose(HIP_NEUTRAL, 1300, STAND_HEIGHT) for n in ("leg_4", "leg_5", "leg_6")}
+        self.move_legs({**front, **rear}, time_ms=time_ms)
+        self.wait_for_move(hold_ms)
+        self.stand(time_ms=time_ms)
+
+    def shake(self, shakes: int = 5, time_ms: int = 180) -> None:
+        """Rapid side-to-side hip shimmy — body rocks left and right."""
+        self.stand()
+        for _ in range(shakes):
+            self.move_all(LegPose(hip=1300), time_ms=time_ms)
+            self.move_all(LegPose(hip=1700), time_ms=time_ms)
+        self.stand()
+
+    def wave(self, rounds: int = 1, time_ms: int = 150) -> None:
+        """Each leg lifts and taps in sequence — a rolling Mexican wave."""
+        self.stand()
+        for _ in range(rounds):
+            for leg_name in ("leg_1", "leg_2", "leg_3", "leg_4", "leg_5", "leg_6"):
+                self.move_leg(leg_name, LegPose(knee=KNEE_LIFT, ankle=ANKLE_LIFT), time_ms=time_ms)
+                self.move_leg(leg_name, LegPose(knee=KNEE_GROUND, ankle=STAND_HEIGHT), time_ms=time_ms)
+        self.stand()
+
+    def bounce(self, bounces: int = 6, time_ms: int = 160) -> None:
+        """Rhythmic body pump — all legs push up and drop together."""
+        self.stand()
+        for _ in range(bounces):
+            self.move_all(LegPose(ankle=1050), time_ms=time_ms)
+            self.move_all(LegPose(ankle=1600), time_ms=time_ms)
+        self.stand()
+
+    def spin(self, half_steps: int = 3, time_ms: int = 140) -> None:
+        """Sweeps left then swings back to start — a pendulum half-turn."""
+        self._run_plan("left",  steps=half_steps, time_ms=time_ms, height=STAND_HEIGHT)
+        self._run_plan("right", steps=half_steps, time_ms=time_ms, height=STAND_HEIGHT)
 
     # ------------------------------------------------------------------
     # Locomotion
@@ -598,10 +636,16 @@ class SpiderRobotController:
         phase_index: int,
         step_time_ms: int = RUN_STEP_TIME_MS,
         height: int = STAND_HEIGHT,
+        ground_knee: int = KNEE_GROUND,
+        lift_knee: int = KNEE_LIFT,
+        lift_ankle: int = ANKLE_LIFT,
     ) -> int:
         """Execute one phase of a movement cycle and return the next phase index."""
         phases = self._plan(direction).streaming_phases()
-        self._execute_phase(phases[phase_index % len(phases)], step_time_ms, height)
+        self._execute_phase(
+            phases[phase_index % len(phases)], step_time_ms,
+            height, ground_knee, lift_knee, lift_ankle,
+        )
         return (phase_index + 1) % len(phases)
 
     # ------------------------------------------------------------------
@@ -631,8 +675,27 @@ class SpiderRobotController:
     def _plan(self, direction: str) -> MotionPlan:
         return self.movements.plan(direction)
 
-    def _execute_phase(self, phase: MotionPhase, time_ms: int, height: int) -> None:
-        self.move_legs(phase.poses(self.legs.keys(), height), time_ms)
+    def _execute_phase(
+        self,
+        phase: MotionPhase,
+        time_ms: int,
+        height: int,
+        ground_knee: int = KNEE_GROUND,
+        lift_knee: int = KNEE_LIFT,
+        lift_ankle: int = ANKLE_LIFT,
+    ) -> None:
+        raw = phase.poses(self.legs.keys(), height)
+        poses = {
+            name: LegPose(
+                hip=p.hip,
+                knee=(ground_knee if p.knee == KNEE_GROUND
+                      else lift_knee  if p.knee == KNEE_LIFT
+                      else p.knee),
+                ankle=(lift_ankle if p.ankle == ANKLE_LIFT else p.ankle),
+            )
+            for name, p in raw.items()
+        }
+        self.move_legs(poses, time_ms)
 
     def _execute_plan(
         self,
@@ -671,7 +734,7 @@ def create_robot(port: str = "/dev/ttyAMA0", baud: int = 9600) -> SpiderRobotCon
 
 RUN_PORT = "/dev/ttyAMA0"
 RUN_BAUD = 9600
-RUN_ACTION = "forward"  # stand | hi | forward | backward | left | right
+RUN_ACTION = "forward"  # stand | hi | bow | shake | wave | forward | backward | left | right
 RUN_LEG = "leg_6"
 RUN_STEPS = 1
 RUN_LOOP = True
@@ -693,6 +756,12 @@ def run_action(robot: SpiderRobotController) -> None:
         robot.stand(time_ms=RUN_MOVE_TIME_MS)
     elif action == "hi":
         robot.say_hi(leg_name=RUN_LEG, time_ms=RUN_MOVE_TIME_MS)
+    elif action == "bow":
+        robot.bow(time_ms=RUN_MOVE_TIME_MS)
+    elif action == "shake":
+        robot.shake()
+    elif action == "wave":
+        robot.wave()
     elif action == "forward":
         robot.move_forward(steps=RUN_STEPS, step_time_ms=RUN_MOVE_TIME_MS)
     elif action == "backward":
@@ -702,7 +771,7 @@ def run_action(robot: SpiderRobotController) -> None:
     elif action == "right":
         robot.turn_right(steps=RUN_STEPS, step_time_ms=RUN_MOVE_TIME_MS)
     else:
-        valid = "stand, hi, forward, backward, left, right"
+        valid = "stand, hi, bow, shake, wave, forward, backward, left, right"
         raise ValueError(f"Unknown RUN_ACTION '{RUN_ACTION}'. Use one of: {valid}")
 
 

@@ -85,6 +85,10 @@ export async function startVideoRecording({ stopMicAfter = false } = {}) {
     startedAtMs: Date.now()
   };
 
+  process.stdin.on('error', () => {});
+  process.stderr.on('error', () => {});
+  if (process.stdio[3]) process.stdio[3].on('error', () => {});
+
   process.stderr.on('data', (chunk) => {
     robotState.video.error = chunk.toString().trim().split('\n').at(-1);
     emitVideo();

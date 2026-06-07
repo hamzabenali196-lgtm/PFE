@@ -7,7 +7,9 @@ import threading
 
 import paho.mqtt.client as mqtt
 
-from robot_controller import RUN_STEP_TIME_MS, create_robot
+from robot_controller import (
+    ANKLE_LIFT, KNEE_GROUND, KNEE_LIFT, RUN_STEP_TIME_MS, STAND_HEIGHT, create_robot,
+)
 
 
 MQTT_HOST = "localhost"
@@ -21,6 +23,17 @@ ROBOT_STEP_TIME_MS = RUN_STEP_TIME_MS
 COMMAND_TOPIC = "robot/command"
 STATUS_TOPIC = "robot/motion/status"
 EVENT_TOPIC = "robot/motion/event"
+
+SPEED_DEFAULT = 5
+SPEED_MIN = 1
+SPEED_MAX = 10
+SPEED_STEP_TIME_MAX_MS = 700  # slowest (speed=1)
+SPEED_STEP_TIME_MIN_MS = 120  # fastest (speed=10)
+
+
+def speed_to_step_ms(speed: int) -> int:
+    frac = (speed - 1) / (SPEED_MAX - SPEED_MIN)
+    return int(SPEED_STEP_TIME_MAX_MS - frac * (SPEED_STEP_TIME_MAX_MS - SPEED_STEP_TIME_MIN_MS))
 
 
 COMMAND_ALIASES = {
@@ -40,9 +53,39 @@ DRIVE_COMMANDS = {
 
 COMMAND_PREFIXES = ("start:", "press:", "hold:")
 
+WALK_HEIGHT_DEFAULT = STAND_HEIGHT   # 1300
+WALK_HEIGHT_MIN     = 950            # body at max high
+WALK_HEIGHT_MAX     = 1600           # body at max low
+WALK_HEIGHT_STEP    = 100
+
+
+def compute_ground_knee(walk_height: int) -> int:
+    """Knee position for grounded legs — both joints contribute to height."""
+    delta = STAND_HEIGHT - walk_height          # positive = standing taller
+    return max(900, KNEE_GROUND - int(delta * 1.2))
+
+
+def compute_lift_knee(walk_height: int) -> int:
+    """Knee lift during gait — lifts more when robot stands taller."""
+    delta = STAND_HEIGHT - walk_height
+    return max(650, KNEE_LIFT - int(delta * 0.6))
+
+
+def compute_lift_ankle(walk_height: int) -> int:
+    """Ankle lift during gait — lifts more when robot stands taller."""
+    delta = STAND_HEIGHT - walk_height
+    return max(580, ANKLE_LIFT - int(delta * 0.6))
+
+HEIGHT_COMMANDS = {"height:up", "height:down"}
+
 ONE_SHOT_COMMANDS = {
     "hi",
     "stand",
+    "bow",
+    "shake",
+    "wave",
+    "bounce",
+    "spin",
 }
 
 
@@ -52,6 +95,9 @@ class MotionWorker:
         self.stop_event = threading.Event()
         self.active_direction: str | None = None
         self.phase_index = 0
+        self.walk_height = WALK_HEIGHT_DEFAULT
+        self.speed = SPEED_DEFAULT
+        self.step_time_ms = speed_to_step_ms(SPEED_DEFAULT)
         self.robot = create_robot(port=ROBOT_PORT, baud=ROBOT_BAUD)
         self.client = mqtt.Client()
         self.client.on_connect = self.on_connect
@@ -88,7 +134,11 @@ class MotionWorker:
                     self.phase_index = self.robot.run_phase(
                         self.active_direction,
                         self.phase_index,
-                        step_time_ms=ROBOT_STEP_TIME_MS,
+                        step_time_ms=self.step_time_ms,
+                        height=self.walk_height,
+                        ground_knee=compute_ground_knee(self.walk_height),
+                        lift_knee=compute_lift_knee(self.walk_height),
+                        lift_ankle=compute_lift_ankle(self.walk_height),
                     )
         finally:
             self.shutdown()
@@ -114,10 +164,43 @@ class MotionWorker:
             direction = command.split(":", 1)[1]
             if direction == self.active_direction:
                 return
-
             self.active_direction = direction
             self.phase_index = 0
-            self.robot.stand(time_ms=ROBOT_STAND_TIME_MS)
+            self.robot.stand(
+                time_ms=ROBOT_STAND_TIME_MS,
+                height=self.walk_height,
+                ground_knee=compute_ground_knee(self.walk_height),
+            )
+            return
+
+        if command.startswith("speed:"):
+            try:
+                speed = int(command.split(":", 1)[1])
+                self.speed = max(SPEED_MIN, min(SPEED_MAX, speed))
+                self.step_time_ms = speed_to_step_ms(self.speed)
+                print(f"Speed set to {self.speed} ({self.step_time_ms}ms/phase)")
+            except (ValueError, IndexError):
+                pass
+            return
+
+        if command == "height:up":
+            self.walk_height = max(WALK_HEIGHT_MIN, self.walk_height - WALK_HEIGHT_STEP)
+            if not self.active_direction:
+                self.robot.stand(
+                    time_ms=ROBOT_STAND_TIME_MS,
+                    height=self.walk_height,
+                    ground_knee=compute_ground_knee(self.walk_height),
+                )
+            return
+
+        if command == "height:down":
+            self.walk_height = min(WALK_HEIGHT_MAX, self.walk_height + WALK_HEIGHT_STEP)
+            if not self.active_direction:
+                self.robot.stand(
+                    time_ms=ROBOT_STAND_TIME_MS,
+                    height=self.walk_height,
+                    ground_knee=compute_ground_knee(self.walk_height),
+                )
             return
 
         handler = self.one_shot_handlers().get(command)
@@ -129,6 +212,11 @@ class MotionWorker:
         return {
             "hi": self.say_hi,
             "stand": self.stand,
+            "bow": self.bow,
+            "shake": self.shake,
+            "wave": self.wave,
+            "bounce": self.bounce,
+            "spin": self.spin,
         }
 
     def say_hi(self) -> None:
@@ -136,7 +224,26 @@ class MotionWorker:
 
     def stand(self) -> None:
         self.phase_index = 0
-        self.robot.stand(time_ms=ROBOT_STAND_TIME_MS)
+        self.robot.stand(
+            time_ms=ROBOT_STAND_TIME_MS,
+            height=self.walk_height,
+            ground_knee=compute_ground_knee(self.walk_height),
+        )
+
+    def bow(self) -> None:
+        self.robot.bow(time_ms=ROBOT_MOVE_TIME_MS)
+
+    def shake(self) -> None:
+        self.robot.shake()
+
+    def wave(self) -> None:
+        self.robot.wave()
+
+    def bounce(self) -> None:
+        self.robot.bounce()
+
+    def spin(self) -> None:
+        self.robot.spin()
 
     def publish_status(self, status: str) -> None:
         self.client.publish(STATUS_TOPIC, status)
@@ -161,6 +268,18 @@ class MotionWorker:
 def normalize_command(value: str) -> str | None:
     command = alias(value)
     command = command.replace("_", ":")
+
+    if command in HEIGHT_COMMANDS:
+        return command
+
+    if command.startswith("speed:"):
+        try:
+            val = int(command.split(":", 1)[1])
+            if SPEED_MIN <= val <= SPEED_MAX:
+                return command
+        except (ValueError, IndexError):
+            pass
+        return None
 
     if command.startswith(COMMAND_PREFIXES):
         direction = alias(command.split(":", 1)[1])

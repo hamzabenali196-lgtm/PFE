@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Hand, SlidersHorizontal } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronsDown, ChevronsUp, Gauge, Hand, RotateCcw, SlidersHorizontal, Waves, Zap } from 'lucide-react';
 import { useRef, useState } from 'react';
 
 const DIRECTIONS = [
@@ -8,9 +8,24 @@ const DIRECTIONS = [
   { id: 'right',    label: 'Right',    icon: <ArrowRight size={26} />,  gridArea: 'right'    },
 ];
 
+const ACTIONS = [
+  { id: 'bow',    label: 'Bow',    icon: <ChevronsDown size={20} /> },
+  { id: 'shake',  label: 'Shake',  icon: <Zap size={20} /> },
+  { id: 'wave',   label: 'Wave',   icon: <Waves size={20} /> },
+  { id: 'bounce', label: 'Bounce', icon: <ChevronsUp size={20} /> },
+  { id: 'spin',   label: 'Spin',   icon: <RotateCcw size={20} /> },
+];
+
 export default function ServoControls({ onHello, onDriveCommand }) {
   const [active, setActive] = useState('');
   const activeRef = useRef('');
+  const [speed, setSpeed] = useState(5);
+
+  function handleSpeedChange(e) {
+    const val = Number(e.target.value);
+    setSpeed(val);
+    onDriveCommand(`speed:${val}`);
+  }
 
   function startDir(id) {
     if (activeRef.current === id) return;
@@ -37,26 +52,49 @@ export default function ServoControls({ onHello, onDriveCommand }) {
       </div>
 
       <div className="dpad-wrap">
-        <div className="dpad" aria-label="Direction controls">
-          {DIRECTIONS.map((dir) => (
+        <div className="dpad-area">
+          <div className="dpad" aria-label="Direction controls">
+            {DIRECTIONS.map((dir) => (
+              <button
+                key={dir.id}
+                type="button"
+                className={`dpad-btn${active === dir.id ? ' dpad-btn--active' : ''}`}
+                style={{ gridArea: dir.gridArea }}
+                onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); startDir(dir.id); }}
+                onPointerUp={(e) => { e.preventDefault(); e.currentTarget.releasePointerCapture(e.pointerId); stopDir(dir.id); }}
+                onPointerCancel={(e) => { e.preventDefault(); stopDir(dir.id); }}
+                onPointerLeave={(e) => { e.preventDefault(); stopDir(dir.id); }}
+                onContextMenu={(e) => e.preventDefault()}
+                draggable="false"
+                aria-label={dir.label}
+                aria-pressed={active === dir.id}
+              >
+                {dir.icon}
+              </button>
+            ))}
+            <div className="dpad-center" aria-hidden="true" />
+          </div>
+
+          <div className="height-controls" aria-label="Body height">
             <button
-              key={dir.id}
               type="button"
-              className={`dpad-btn${active === dir.id ? ' dpad-btn--active' : ''}`}
-              style={{ gridArea: dir.gridArea }}
-              onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); startDir(dir.id); }}
-              onPointerUp={(e) => { e.preventDefault(); e.currentTarget.releasePointerCapture(e.pointerId); stopDir(dir.id); }}
-              onPointerCancel={(e) => { e.preventDefault(); stopDir(dir.id); }}
-              onPointerLeave={(e) => { e.preventDefault(); stopDir(dir.id); }}
-              onContextMenu={(e) => e.preventDefault()}
-              draggable="false"
-              aria-label={dir.label}
-              aria-pressed={active === dir.id}
+              className="height-btn"
+              onClick={() => onDriveCommand('height_down')}
+              aria-label="Raise body"
             >
-              {dir.icon}
+              <ArrowUp size={18} />
+              <span>High</span>
             </button>
-          ))}
-          <div className="dpad-center" aria-hidden="true" />
+            <button
+              type="button"
+              className="height-btn"
+              onClick={() => onDriveCommand('height_up')}
+              aria-label="Lower body"
+            >
+              <ArrowDown size={18} />
+              <span>Low</span>
+            </button>
+          </div>
         </div>
 
         <button
@@ -68,6 +106,44 @@ export default function ServoControls({ onHello, onDriveCommand }) {
           <Hand size={20} aria-hidden="true" />
           <span>Wave</span>
         </button>
+
+        <div className="speed-control">
+          <div className="speed-header">
+            <Gauge size={14} aria-hidden="true" />
+            <span className="speed-label">Speed</span>
+            <span className="speed-value">{speed}<span className="speed-max">/10</span></span>
+          </div>
+          <input
+            type="range"
+            min="1"
+            max="10"
+            step="1"
+            value={speed}
+            onChange={handleSpeedChange}
+            className="speed-slider"
+            style={{ '--pct': `${(speed - 1) / 9 * 100}%` }}
+            aria-label="Robot speed"
+          />
+          <div className="speed-markers">
+            <span>Slow</span>
+            <span>Fast</span>
+          </div>
+        </div>
+
+        <div className="actions-row">
+          {ACTIONS.map((action) => (
+            <button
+              key={action.id}
+              type="button"
+              className="action-btn"
+              onClick={() => onDriveCommand(action.id)}
+              aria-label={action.label}
+            >
+              {action.icon}
+              <span>{action.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
     </section>
   );

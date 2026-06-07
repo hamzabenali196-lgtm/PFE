@@ -159,6 +159,9 @@ function startMic() {
   addEvent('status', `USB mic enabled (${resolved.device})`);
   emitMic();
 
+  micProcess.stdout.on('error', () => {});
+  micProcess.stderr.on('error', () => {});
+
   micProcess.stdout.on('data', (chunk) => {
     const level = calculateAudioLevel(chunk);
     robotState.mic.level = level;
