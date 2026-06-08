@@ -242,7 +242,6 @@ export default function App() {
             video={robot.video}
             onDriveCommand={handleDriveCommand}
           />
-          <LocationPanel location={robot.location} />
         </div>
 
         <div className="side-stack">
@@ -270,6 +269,10 @@ export default function App() {
             onDelete={removeVideo}
           />
           <DetectionHistory history={robot.history} onDelete={removeHistoryItem} />
+        </div>
+
+        <div className="location-stack">
+          <LocationPanel location={robot.location} />
         </div>
       </main>
     </div>

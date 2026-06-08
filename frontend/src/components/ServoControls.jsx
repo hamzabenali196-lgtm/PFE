@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronsDown, ChevronsUp, Gauge, Hand, RotateCcw, SlidersHorizontal, Waves, Zap } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronsDown, ChevronsUp, Gauge, Hand, MoveHorizontal, Radio, SlidersHorizontal, Waves, Wind, Zap } from 'lucide-react';
 import { useRef, useState } from 'react';
 
 const DIRECTIONS = [
@@ -13,14 +13,16 @@ const ACTIONS = [
   { id: 'shake',  label: 'Shake',  icon: <Zap size={20} /> },
   { id: 'wave',   label: 'Wave',   icon: <Waves size={20} /> },
   { id: 'bounce', label: 'Bounce', icon: <ChevronsUp size={20} /> },
-  { id: 'spin',   label: 'Spin',   icon: <RotateCcw size={20} /> },
+  { id: 'sway',   label: 'Sway',   icon: <MoveHorizontal size={20} /> },
+  { id: 'tiptoe', label: 'Tiptoe', icon: <Wind size={20} /> },
+  { id: 'ripple', label: 'Ripple', icon: <Radio size={20} /> },
+  { id: 'pulse',  label: 'Pulse',  icon: <ChevronsUp size={20} /> },
 ];
 
 export default function ServoControls({ onHello, onDriveCommand }) {
   const [active, setActive] = useState('');
   const activeRef = useRef('');
   const [speed, setSpeed] = useState(5);
-
   function handleSpeedChange(e) {
     const val = Number(e.target.value);
     setSpeed(val);
@@ -144,6 +146,7 @@ export default function ServoControls({ onHello, onDriveCommand }) {
             </button>
           ))}
         </div>
+
       </div>
     </section>
   );

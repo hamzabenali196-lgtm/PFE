@@ -34,6 +34,7 @@ KNEE_LIFT = 900
 ANKLE_LIFT = 800
 KNEE_GROUND = CENTER
 LEG_UP = KNEE_LIFT
+
 # ---------------------------------------------------------------------------
 # Robot layout
 # ---------------------------------------------------------------------------
@@ -528,7 +529,8 @@ class SpiderRobotController:
     def stand(self, time_ms: int = 700, height: int = STAND_HEIGHT, ground_knee: int = KNEE_GROUND) -> None:
         self.move_all(LegPose(HIP_NEUTRAL, ground_knee, height), time_ms=time_ms)
 
-    # ------------------------------------------------------------------
+
+# ------------------------------------------------------------------
     # Expressive actions
     # ------------------------------------------------------------------
 
@@ -585,10 +587,47 @@ class SpiderRobotController:
             self.move_all(LegPose(ankle=1600), time_ms=time_ms)
         self.stand()
 
-    def spin(self, half_steps: int = 3, time_ms: int = 140) -> None:
-        """Sweeps left then swings back to start — a pendulum half-turn."""
-        self._run_plan("left",  steps=half_steps, time_ms=time_ms, height=STAND_HEIGHT)
-        self._run_plan("right", steps=half_steps, time_ms=time_ms, height=STAND_HEIGHT)
+    def sway(self, cycles: int = 4, time_ms: int = 380) -> None:
+        """Slow side-to-side body rock — left legs rise while right dip, then swap."""
+        self.stand()
+        for _ in range(cycles):
+            left  = {n: LegPose(ankle=1150) for n in LEFT_LEGS}
+            right = {n: LegPose(ankle=1430) for n in RIGHT_LEGS}
+            self.move_legs({**left, **right}, time_ms=time_ms)
+            left  = {n: LegPose(ankle=1430) for n in LEFT_LEGS}
+            right = {n: LegPose(ankle=1150) for n in RIGHT_LEGS}
+            self.move_legs({**left, **right}, time_ms=time_ms)
+        self.stand()
+
+    def tiptoe(self, rounds: int = 3, time_ms: int = 320) -> None:
+        """Graceful rise on extended ankles — tripods alternate while elevated."""
+        self.stand()
+        self.move_all(LegPose(ankle=1080), time_ms=450)
+        for _ in range(rounds):
+            a = {n: LegPose(knee=1200, ankle=950) for n in TRIPOD_A}
+            self.move_legs(a, time_ms=time_ms)
+            self.move_legs({n: LegPose(knee=KNEE_GROUND, ankle=1080) for n in TRIPOD_A}, time_ms=time_ms)
+            b = {n: LegPose(knee=1200, ankle=950) for n in TRIPOD_B}
+            self.move_legs(b, time_ms=time_ms)
+            self.move_legs({n: LegPose(knee=KNEE_GROUND, ankle=1080) for n in TRIPOD_B}, time_ms=time_ms)
+        self.stand()
+
+    def ripple(self, rounds: int = 2, time_ms: int = 180) -> None:
+        """Sequential knee-tap rolling from leg 1 to 6 — a slow calming wave."""
+        self.stand()
+        for _ in range(rounds):
+            for leg_name in ("leg_1", "leg_2", "leg_3", "leg_4", "leg_5", "leg_6"):
+                self.move_leg(leg_name, LegPose(knee=1200, ankle=1150), time_ms=time_ms)
+                self.move_leg(leg_name, LegPose(knee=KNEE_GROUND, ankle=STAND_HEIGHT), time_ms=time_ms)
+        self.stand()
+
+    def pulse(self, pulses: int = 5, time_ms: int = 550) -> None:
+        """Slow breathing crouch — body sinks and rises on gently bent knees."""
+        self.stand()
+        for _ in range(pulses):
+            self.move_all(LegPose(knee=1250, ankle=1380), time_ms=time_ms)
+            self.move_all(LegPose(knee=KNEE_GROUND, ankle=STAND_HEIGHT), time_ms=time_ms)
+        self.stand()
 
     # ------------------------------------------------------------------
     # Locomotion
@@ -641,7 +680,7 @@ class SpiderRobotController:
         lift_ankle: int = ANKLE_LIFT,
     ) -> int:
         """Execute one phase of a movement cycle and return the next phase index."""
-        phases = self._plan(direction).streaming_phases()
+        phases = self.movements.plan(direction).streaming_phases()
         self._execute_phase(
             phases[phase_index % len(phases)], step_time_ms,
             height, ground_knee, lift_knee, lift_ankle,

@@ -85,7 +85,10 @@ ONE_SHOT_COMMANDS = {
     "shake",
     "wave",
     "bounce",
-    "spin",
+    "sway",
+    "tiptoe",
+    "ripple",
+    "pulse",
 }
 
 
@@ -166,11 +169,7 @@ class MotionWorker:
                 return
             self.active_direction = direction
             self.phase_index = 0
-            self.robot.stand(
-                time_ms=ROBOT_STAND_TIME_MS,
-                height=self.walk_height,
-                ground_knee=compute_ground_knee(self.walk_height),
-            )
+            self._do_stand()
             return
 
         if command.startswith("speed:"):
@@ -186,21 +185,13 @@ class MotionWorker:
         if command == "height:up":
             self.walk_height = max(WALK_HEIGHT_MIN, self.walk_height - WALK_HEIGHT_STEP)
             if not self.active_direction:
-                self.robot.stand(
-                    time_ms=ROBOT_STAND_TIME_MS,
-                    height=self.walk_height,
-                    ground_knee=compute_ground_knee(self.walk_height),
-                )
+                self._do_stand()
             return
 
         if command == "height:down":
             self.walk_height = min(WALK_HEIGHT_MAX, self.walk_height + WALK_HEIGHT_STEP)
             if not self.active_direction:
-                self.robot.stand(
-                    time_ms=ROBOT_STAND_TIME_MS,
-                    height=self.walk_height,
-                    ground_knee=compute_ground_knee(self.walk_height),
-                )
+                self._do_stand()
             return
 
         handler = self.one_shot_handlers().get(command)
@@ -216,7 +207,10 @@ class MotionWorker:
             "shake": self.shake,
             "wave": self.wave,
             "bounce": self.bounce,
-            "spin": self.spin,
+            "sway": self.sway,
+            "tiptoe": self.tiptoe,
+            "ripple": self.ripple,
+            "pulse": self.pulse,
         }
 
     def say_hi(self) -> None:
@@ -224,6 +218,9 @@ class MotionWorker:
 
     def stand(self) -> None:
         self.phase_index = 0
+        self._do_stand()
+
+    def _do_stand(self) -> None:
         self.robot.stand(
             time_ms=ROBOT_STAND_TIME_MS,
             height=self.walk_height,
@@ -242,8 +239,17 @@ class MotionWorker:
     def bounce(self) -> None:
         self.robot.bounce()
 
-    def spin(self) -> None:
-        self.robot.spin()
+    def sway(self) -> None:
+        self.robot.sway()
+
+    def tiptoe(self) -> None:
+        self.robot.tiptoe()
+
+    def ripple(self) -> None:
+        self.robot.ripple()
+
+    def pulse(self) -> None:
+        self.robot.pulse()
 
     def publish_status(self, status: str) -> None:
         self.client.publish(STATUS_TOPIC, status)
