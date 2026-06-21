@@ -17,37 +17,18 @@ MQTT_PORT = 1883
 COORDS = "35.7649,10.8062"
 FACE_CONFIDENCE = 0.6
 
-COMMAND_TOPICS = [
-    ("robot/servo/oy", 0),
-    ("robot/servo/oz", 0),
-]
-
 
 def on_mqtt_connect(client, userdata, flags, rc):
     if rc == 0:
-        client.subscribe(COMMAND_TOPICS)
         client.publish("robot/status", "online")
         print("MQTT Connecte - commandes dashboard actives")
     else:
         print(f"Erreur MQTT rc={rc}")
 
 
-def on_mqtt_message(client, userdata, msg):
-    payload = msg.payload.decode("utf-8", errors="ignore").strip()
-
-    if msg.topic == "robot/servo/oy":
-        print(f"Servo Oy -> {payload}")
-        # TODO: connecter ici le servo horizontal.
-
-    if msg.topic == "robot/servo/oz":
-        print(f"Servo Oz -> {payload}")
-        # TODO: connecter ici le servo hauteur/extension.
-
-
 def main():
     client_mqtt = mqtt.Client()
     client_mqtt.on_connect = on_mqtt_connect
-    client_mqtt.on_message = on_mqtt_message
 
     try:
         client_mqtt.connect(MQTT_HOST, MQTT_PORT, 60)

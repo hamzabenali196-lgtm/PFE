@@ -7,6 +7,7 @@ import threading
 
 import paho.mqtt.client as mqtt
 
+from lobot_controller import LobotServo
 from robot_controller import (
     ANKLE_LIFT, KNEE_GROUND, KNEE_LIFT, RUN_STEP_TIME_MS, STAND_HEIGHT, create_robot,
 )
@@ -23,6 +24,16 @@ ROBOT_STEP_TIME_MS = RUN_STEP_TIME_MS
 COMMAND_TOPIC = "robot/command"
 STATUS_TOPIC = "robot/motion/status"
 EVENT_TOPIC = "robot/motion/event"
+
+HEAD_SERVO_OY = 19   # tilt (up / down)
+HEAD_SERVO_OZ = 20   # pan  (left / right)
+HEAD_MOVE_TIME_MS = 200
+
+
+def angle_to_lobot(angle: float) -> int:
+    """Convert 0–180° to Lobot position 500–2500 (center 90° → 1500)."""
+    return round(500 + (float(angle) / 180.0) * 2000)
+
 
 SPEED_DEFAULT = 5
 SPEED_MIN = 1
@@ -109,13 +120,21 @@ class MotionWorker:
     def on_connect(self, client, userdata, flags, rc) -> None:
         if rc == 0:
             client.subscribe(COMMAND_TOPIC)
+            client.subscribe("robot/servo/oy")
+            client.subscribe("robot/servo/oz")
             self.publish_status("online")
-            print("Motion worker online - waiting for robot/command")
+            print("Motion worker online - waiting for robot/command and robot/servo/*")
         else:
             print(f"Motion worker MQTT error rc={rc}")
 
     def on_message(self, client, userdata, msg) -> None:
         payload = msg.payload.decode("utf-8", errors="ignore").strip()
+
+        if msg.topic in ("robot/servo/oy", "robot/servo/oz"):
+            axis = "oy" if msg.topic == "robot/servo/oy" else "oz"
+            self.commands.put(f"servo:{axis}:{payload}")
+            return
+
         command = normalize_command(payload)
         if command is None:
             print(f"Unknown motion command ignored: {payload}")
@@ -162,6 +181,20 @@ class MotionWorker:
     def execute(self, command: str) -> None:
         print(f"Executing motion command: {command}")
         self.publish_event(command)
+
+        if command.startswith("servo:"):
+            _, axis, value = command.split(":", 2)
+            try:
+                servo_id = HEAD_SERVO_OY if axis == "oy" else HEAD_SERVO_OZ
+                position = angle_to_lobot(int(value))
+                self.robot.controller.move_servos(
+                    [LobotServo(servo_id, position)],
+                    HEAD_MOVE_TIME_MS,
+                )
+                print(f"Head servo {servo_id} (axis={axis}) -> {value}° pos={position}")
+            except (ValueError, IndexError):
+                pass
+            return
 
         if command.startswith("start:"):
             direction = command.split(":", 1)[1]

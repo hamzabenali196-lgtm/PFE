@@ -85,7 +85,10 @@ export default function LiveCamera({ frame, lastFrameAt, video, onDriveCommand }
     try { await requestFullscreen.call(shell); } catch { setIsFullscreenFallback(true); }
   }
 
-  const shellClassName = ['video-shell', isFullscreenFallback ? 'is-mobile-fullscreen' : ''].filter(Boolean).join(' ');
+  const shellClassName = [
+    'video-shell',
+    isFullscreenFallback ? 'is-mobile-fullscreen' : '',
+  ].filter(Boolean).join(' ');
 
   return (
     <section className="tool-panel live-panel">

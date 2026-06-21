@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronsDown, ChevronsUp, Gauge, Hand, MoveHorizontal, Radio, SlidersHorizontal, Waves, Wind, Zap } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronsDown, ChevronsUp, Crosshair, Gauge, Hand, MoveHorizontal, Radio, SlidersHorizontal, Waves, Wind, Zap } from 'lucide-react';
 import { useRef, useState } from 'react';
 
 const DIRECTIONS = [
@@ -19,10 +19,11 @@ const ACTIONS = [
   { id: 'pulse',  label: 'Pulse',  icon: <ChevronsUp size={20} /> },
 ];
 
-export default function ServoControls({ onHello, onDriveCommand }) {
+export default function ServoControls({ onHello, onDriveCommand, headPos, onHeadMove }) {
   const [active, setActive] = useState('');
   const activeRef = useRef('');
   const [speed, setSpeed] = useState(5);
+
   function handleSpeedChange(e) {
     const val = Number(e.target.value);
     setSpeed(val);
@@ -41,6 +42,11 @@ export default function ServoControls({ onHello, onDriveCommand }) {
     activeRef.current = '';
     setActive('');
     onDriveCommand('stand');
+  }
+
+  function centerHead() {
+    onHeadMove('oz', 90);
+    onHeadMove('oy', 90);
   }
 
   return (
@@ -147,7 +153,52 @@ export default function ServoControls({ onHello, onDriveCommand }) {
           ))}
         </div>
 
+        {headPos && onHeadMove && (
+          <div className="head-section">
+            <div className="head-section-label">
+              <span>Head</span>
+              <button type="button" className="head-center-btn" onClick={centerHead} aria-label="Center head">
+                <Crosshair size={13} />
+                Center
+              </button>
+            </div>
+
+            <div className="head-slider-row">
+              <div className="head-slider-header">
+                <span className="head-slider-label">Pan</span>
+                <strong className="head-slider-val">{headPos.pan}°</strong>
+              </div>
+              <input
+                type="range" min="30" max="150" step="1"
+                value={headPos.pan}
+                onChange={(e) => onHeadMove('oz', Number(e.target.value))}
+                className="head-slider"
+                style={{ '--pct': `${(headPos.pan - 30) / 120 * 100}%` }}
+                aria-label="Head pan"
+              />
+              <div className="head-slider-markers"><span>Left</span><span>Right</span></div>
+            </div>
+
+            <div className="head-slider-row">
+              <div className="head-slider-header">
+                <span className="head-slider-label">Tilt</span>
+                <strong className="head-slider-val">{headPos.tilt}°</strong>
+              </div>
+              <input
+                type="range" min="30" max="150" step="1"
+                value={headPos.tilt}
+                onChange={(e) => onHeadMove('oy', Number(e.target.value))}
+                className="head-slider"
+                style={{ '--pct': `${(headPos.tilt - 30) / 120 * 100}%` }}
+                aria-label="Head tilt"
+              />
+              <div className="head-slider-markers"><span>Up</span><span>Down</span></div>
+            </div>
+          </div>
+        )}
+
       </div>
     </section>
   );
 }
+

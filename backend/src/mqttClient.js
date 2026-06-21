@@ -196,14 +196,20 @@ export function publishCommand(command) {
   return addEvent('command', String(command), { topic: commandTopics.command });
 }
 
+const SERVO_LIMITS = {
+  oy: { min: 30, max: 150 },
+  oz: { min: 30, max: 150 },
+};
+
 export function publishServo(axis, value) {
   if (!mqttClient?.connected) {
     throw new Error('MQTT broker is not connected');
   }
 
+  const limits = SERVO_LIMITS[axis];
   const numericValue = Number(value);
-  if (!Number.isFinite(numericValue) || numericValue < 0 || numericValue > 180) {
-    throw new Error('Servo value must be between 0 and 180');
+  if (!Number.isFinite(numericValue) || numericValue < limits.min || numericValue > limits.max) {
+    throw new Error(`Servo ${axis} value must be between ${limits.min} and ${limits.max}`);
   }
 
   const topic = axis === 'oz' ? commandTopics.servoOz : commandTopics.servoOy;

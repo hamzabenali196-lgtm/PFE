@@ -16,6 +16,7 @@ import {
   getRobotState,
   postMicEnabled,
   postRobotCommand,
+  postServo,
   startVideoRecording,
   stopVideoRecording
 } from './lib/api.js';
@@ -48,6 +49,7 @@ export default function App() {
   const [socketConnected, setSocketConnected] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [notice, setNotice] = useState('');
+  const [headPos, setHeadPos] = useState({ pan: 90, tilt: 90 });
   const lastSpokenRef = useRef('');
 
   const socket = useMemo(() => io(API_URL, { autoConnect: false }), []);
@@ -194,6 +196,11 @@ export default function App() {
     await runAction(() => postRobotCommand(command));
   }, []);
 
+  const handleHeadMove = useCallback(async (axis, value) => {
+    setHeadPos((p) => ({ ...p, [axis === 'oz' ? 'pan' : 'tilt']: value }));
+    await runAction(() => postServo(axis, value));
+  }, []);
+
   const handleVoiceCommand = useCallback(async (text) => {
     const normalized = text.toLowerCase();
 
@@ -248,6 +255,8 @@ export default function App() {
           <ServoControls
             onHello={() => runAction(() => postRobotCommand('HELLO'))}
             onDriveCommand={handleDriveCommand}
+            headPos={headPos}
+            onHeadMove={handleHeadMove}
           />
           <AlertPanel
             alert={robot.lastAlert}
