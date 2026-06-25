@@ -1,0 +1,9 @@
+# YOLO dataset config for the candle / small-flame detector.
+# Single class on purpose: a candle is just a small red/orange flame (no smoke).
+# Paths are relative to this file's folder (candle_detector/).
+path: dataset
+train: images/train
+val: images/val
+
+names:
+  0: flame

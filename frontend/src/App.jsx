@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Cpu, Server } from 'lucide-react';
+import { Bell, Bot, Cpu, Film, Gamepad2, Server } from 'lucide-react';
 import { io } from 'socket.io-client';
 import AlertPanel from './components/AlertPanel.jsx';
+import ControlPanel from './components/ControlPanel.jsx';
 import DetectionHistory from './components/DetectionHistory.jsx';
 import LiveCamera from './components/LiveCamera.jsx';
 import LocationPanel from './components/LocationPanel.jsx';
 import MicPanel from './components/MicPanel.jsx';
-import ServoControls from './components/ServoControls.jsx';
 import StatusBadge from './components/StatusBadge.jsx';
 import VideoRecorder from './components/VideoRecorder.jsx';
 import {
@@ -26,6 +26,9 @@ const initialRobotState = {
   liveFrame: null,
   lastPhoto: null,
   lastAlert: null,
+  lastFireAlert: null,
+  lastFirePhoto: null,
+  lastObstacle: null,
   location: null,
   frameCount: 0,
   lastFrameAt: null,
@@ -49,7 +52,8 @@ export default function App() {
   const [socketConnected, setSocketConnected] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [notice, setNotice] = useState('');
-  const [headPos, setHeadPos] = useState({ pan: 90, tilt: 90 });
+  const [headPos, setHeadPos] = useState({ pan: 90, tilt: 60 });
+  const [sideTab, setSideTab] = useState('controls');
   const lastSpokenRef = useRef('');
 
   const socket = useMemo(() => io(API_URL, { autoConnect: false }), []);
@@ -103,6 +107,18 @@ export default function App() {
         lastAlert: alert,
         lastAlertAt: alert.receivedAt
       }));
+    });
+
+    socket.on('robot:fire_alert', (alert) => {
+      setRobot((current) => ({ ...current, lastFireAlert: alert }));
+    });
+
+    socket.on('robot:fire_photo', ({ image }) => {
+      setRobot((current) => ({ ...current, lastFirePhoto: image }));
+    });
+
+    socket.on('robot:obstacle', (obstacle) => {
+      setRobot((current) => ({ ...current, lastObstacle: obstacle }));
     });
 
     socket.on('robot:history:add', (item) => {
@@ -225,11 +241,11 @@ export default function App() {
       <header className="app-header">
         <div className="header-brand">
           <div className="header-logo">
-            <Bot size={22} aria-hidden="true" />
+            <Bot size={24} aria-hidden="true" />
           </div>
           <div>
-            <p className="eyebrow">Master&apos;s Project</p>
-            <h1>Spider Robot</h1>
+            <p className="eyebrow">PFE — Masters Project</p>
+            <h1>Spider Robot Control</h1>
           </div>
         </div>
         <div className="header-status">
@@ -252,32 +268,71 @@ export default function App() {
         </div>
 
         <div className="side-stack">
-          <ServoControls
-            onHello={() => runAction(() => postRobotCommand('HELLO'))}
-            onDriveCommand={handleDriveCommand}
-            headPos={headPos}
-            onHeadMove={handleHeadMove}
-          />
-          <AlertPanel
-            alert={robot.lastAlert}
-            photo={robot.lastPhoto}
-            voiceEnabled={voiceEnabled}
-            onToggleVoice={() => setVoiceEnabled((value) => !value)}
-          />
-          <MicPanel
-            mic={robot.mic}
-            socket={socket}
-            onToggle={toggleMic}
-            onVoiceCommand={handleVoiceCommand}
-          />
-          <VideoRecorder
-            video={robot.video}
-            videos={robot.videoRecordings}
-            onStart={startVideo}
-            onStop={stopVideo}
-            onDelete={removeVideo}
-          />
-          <DetectionHistory history={robot.history} onDelete={removeHistoryItem} />
+          <div className="side-tabs">
+            <button
+              className={`side-tab${sideTab === 'controls' ? ' active' : ''}`}
+              onClick={() => setSideTab('controls')}
+            >
+              <Gamepad2 size={17} aria-hidden="true" />
+              Controls
+            </button>
+            <button
+              className={`side-tab${sideTab === 'alerts' ? ' active' : ''}`}
+              onClick={() => setSideTab('alerts')}
+            >
+              <Bell size={17} aria-hidden="true" />
+              Alerts
+            </button>
+            <button
+              className={`side-tab${sideTab === 'media' ? ' active' : ''}`}
+              onClick={() => setSideTab('media')}
+            >
+              <Film size={17} aria-hidden="true" />
+              Media
+            </button>
+          </div>
+
+          {sideTab === 'controls' && (
+            <ControlPanel
+              onHello={() => runAction(() => postRobotCommand('HELLO'))}
+              onDriveCommand={handleDriveCommand}
+              headPos={headPos}
+              onHeadMove={handleHeadMove}
+            />
+          )}
+
+          {sideTab === 'alerts' && (
+            <>
+              <AlertPanel
+                alert={robot.lastAlert}
+                photo={robot.lastPhoto}
+                fireAlert={robot.lastFireAlert}
+                firePhoto={robot.lastFirePhoto}
+                obstacle={robot.lastObstacle}
+                voiceEnabled={voiceEnabled}
+                onToggleVoice={() => setVoiceEnabled((value) => !value)}
+              />
+              <MicPanel
+                mic={robot.mic}
+                socket={socket}
+                onToggle={toggleMic}
+                onVoiceCommand={handleVoiceCommand}
+              />
+            </>
+          )}
+
+          {sideTab === 'media' && (
+            <>
+              <VideoRecorder
+                video={robot.video}
+                videos={robot.videoRecordings}
+                onStart={startVideo}
+                onStop={stopVideo}
+                onDelete={removeVideo}
+              />
+              <DetectionHistory history={robot.history} onDelete={removeHistoryItem} />
+            </>
+          )}
         </div>
 
         <div className="location-stack">

@@ -8,9 +8,12 @@ import { clearVideoRecordings, handleVideoFrame } from './videoService.js';
 const inboundTopics = [
   'robot/flux',
   'robot/photo',
+  'robot/feu_photo',
   'robot/localisation',
   'robot/alerte_vocale',
   'robot/detection',
+  'robot/feu',
+  'robot/obstacle',
   'robot/status',
   'robot/motion/status',
   'robot/motion/event'
@@ -24,6 +27,7 @@ const commandTopics = {
 
 let mqttClient;
 let pendingDetection = null;
+let lastObstacleDetected = null;  // last broadcast obstacle state (so we emit only on change)
 let lastHistorySaveAt = 0;
 const HISTORY_SAVE_COOLDOWN_MS = 15000;
 
@@ -86,6 +90,39 @@ async function handleMessage(io, topic, payload) {
       pendingDetection = null;
     }
 
+    return;
+  }
+
+  if (topic === 'robot/feu_photo') {
+    robotState.lastFirePhoto = text;
+    io.emit('robot:fire_photo', { image: text, receivedAt: now });
+    return;
+  }
+
+  if (topic === 'robot/feu') {
+    const detected = !text.toLowerCase().includes('aucun');
+    robotState.lastFireAlert = { text, topic, receivedAt: now, detected };
+    robotState.lastFireAlertAt = now;
+    if (!detected) {
+      robotState.lastFirePhoto = null;
+      io.emit('robot:fire_photo', { image: null, receivedAt: now });
+    }
+    io.emit('robot:fire_alert', { ...robotState.lastFireAlert });
+    emitState(io);
+    return;
+  }
+
+  if (topic === 'robot/obstacle') {
+    // Robot publishes "1" (obstacle) / "0" (clear) at ~2 Hz. Keep the latest in state
+    // for fresh page loads, but only push to clients when the state actually flips —
+    // emitState carries the whole robotState (incl. the live frame), so avoid spamming it.
+    const detected = text.trim() === '1';
+    robotState.lastObstacle = { detected, receivedAt: now };
+    if (detected !== lastObstacleDetected) {
+      lastObstacleDetected = detected;
+      io.emit('robot:obstacle', { ...robotState.lastObstacle });
+      emitState(io);
+    }
     return;
   }
 
@@ -197,7 +234,7 @@ export function publishCommand(command) {
 }
 
 const SERVO_LIMITS = {
-  oy: { min: 30, max: 150 },
+  oy: { min: 0, max: 120 },
   oz: { min: 30, max: 150 },
 };
 

@@ -5,3 +5,9 @@ frontend/dist/
 *.pyc
 __pycache__/
 .venv/
+
+# candle detector training artifacts (keep scripts, not data/weights)
+candle_detector/dataset/
+candle_detector/outputs/
+*.pt
+!fire_detection_model.pt

@@ -46,7 +46,7 @@ export default function ServoControls({ onHello, onDriveCommand, headPos, onHead
 
   function centerHead() {
     onHeadMove('oz', 90);
-    onHeadMove('oy', 90);
+    onHeadMove('oy', 60);
   }
 
   return (
@@ -179,20 +179,25 @@ export default function ServoControls({ onHello, onDriveCommand, headPos, onHead
               <div className="head-slider-markers"><span>Left</span><span>Right</span></div>
             </div>
 
-            <div className="head-slider-row">
+            <div className="head-slider-row head-slider-row--tilt">
               <div className="head-slider-header">
                 <span className="head-slider-label">Tilt</span>
                 <strong className="head-slider-val">{headPos.tilt}°</strong>
               </div>
-              <input
-                type="range" min="30" max="150" step="1"
-                value={headPos.tilt}
-                onChange={(e) => onHeadMove('oy', Number(e.target.value))}
-                className="head-slider"
-                style={{ '--pct': `${(headPos.tilt - 30) / 120 * 100}%` }}
-                aria-label="Head tilt"
-              />
-              <div className="head-slider-markers"><span>Up</span><span>Down</span></div>
+              <div className="head-slider-vertical-wrap">
+                <span className="head-slider-vlabel">Up</span>
+                <div className="head-slider-vertical-track">
+                  <input
+                    type="range" min="0" max="120" step="1"
+                    value={headPos.tilt}
+                    onChange={(e) => onHeadMove('oy', Number(e.target.value))}
+                    className="head-slider head-slider--vertical"
+                    style={{ '--pct': `${headPos.tilt / 120 * 100}%` }}
+                    aria-label="Head tilt"
+                  />
+                </div>
+                <span className="head-slider-vlabel">Down</span>
+              </div>
             </div>
           </div>
         )}
