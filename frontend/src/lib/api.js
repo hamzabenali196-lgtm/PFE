@@ -16,6 +16,18 @@ export async function postServo(axis, value) {
   return postJson('/api/robot/servo', { axis, value });
 }
 
+export async function postMode(mode) {
+  return postJson('/api/robot/mode', { mode });
+}
+
+export async function postAutoConfig(turnMs) {
+  return postJson('/api/robot/auto/config', { turnMs });
+}
+
+export async function postAutoTestTurn(turnMs) {
+  return postJson('/api/robot/auto/test-turn', { turnMs });
+}
+
 export async function deleteHistoryItem(id) {
   const response = await fetch(`${API_URL}/api/robot/history/${id}`, {
     method: 'DELETE'

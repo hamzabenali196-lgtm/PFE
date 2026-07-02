@@ -21,6 +21,8 @@
   --blue-border: #93c5fd;
   --teal: #0d9488;
   --amber: #d97706;
+  --amber-bg: #fffbeb;
+  --amber-border: #fcd34d;
 
   --shadow: 0 2px 8px rgba(15,23,42,.07), 0 1px 2px rgba(15,23,42,.05);
   --shadow-md: 0 4px 20px rgba(15,23,42,.08), 0 1px 3px rgba(15,23,42,.06);
@@ -87,6 +89,7 @@ button:disabled { cursor: not-allowed; opacity: .45; box-shadow: none; }
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 14px 20px;
   margin-bottom: 16px;
@@ -1168,6 +1171,168 @@ button:disabled { cursor: not-allowed; opacity: .45; box-shadow: none; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 5px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* ── Mode toggle (Manual │ Auto) ── */
+.mode-toggle {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel-2);
+  box-shadow: var(--shadow-sm);
+}
+
+.mode-toggle-btn {
+  min-height: 36px;
+  gap: 6px;
+  padding: 0 14px;
+  border: 1.5px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: .82rem;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.mode-toggle-btn:hover {
+  background: var(--blue-bg);
+  border-color: var(--blue-border);
+  color: var(--blue);
+  box-shadow: none;
+}
+
+.mode-toggle-btn.active {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(37,99,235,.3);
+}
+
+.mode-toggle-btn.active:hover { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
+
+.mode-toggle-btn--auto:hover {
+  background: var(--amber-bg);
+  border-color: var(--amber-border);
+  color: var(--amber);
+}
+
+.mode-toggle-btn--auto.active,
+.mode-toggle-btn--auto.active:hover {
+  background: var(--amber);
+  border-color: var(--amber);
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(217,119,6,.32);
+}
+
+/* Motors drive mode — teal accent so it's distinct from Manual/Auto's blue/amber. */
+.mode-toggle-btn--motors:hover {
+  background: rgba(13,148,136,.12);
+  border-color: rgba(13,148,136,.5);
+  color: #0d9488;
+}
+
+.mode-toggle-btn--motors.active,
+.mode-toggle-btn--motors.active:hover {
+  background: #0d9488;
+  border-color: #0d9488;
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(13,148,136,.32);
+}
+
+/* ── Auto: live-camera AUTO chip ── */
+.video-state.auto { border-color: rgba(251,191,36,.5); color: #fcd34d; }
+
+/* ── Auto status panel ── */
+.auto-rec {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 28px; padding: 0 10px;
+  border: 1.5px solid var(--line-strong); border-radius: 20px;
+  background: var(--panel-2); color: var(--muted);
+  font-size: .72rem; font-weight: 800; letter-spacing: .04em;
+}
+
+.auto-rec.on { border-color: var(--red-border); background: var(--red-bg); color: var(--red); }
+.auto-rec.on svg { fill: currentColor; animation: auto-blink 1.2s ease-in-out infinite; }
+
+@keyframes auto-blink { 50% { opacity: .25; } }
+
+.auto-status-banner {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 56px; padding: 12px 16px; margin-bottom: 14px;
+  border: 1.5px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--panel-2); color: var(--soft);
+  font-size: .95rem; font-weight: 700;
+}
+
+.auto-status-banner svg { flex-shrink: 0; }
+.auto-status-banner.search { border-color: var(--blue-border); background: var(--blue-bg); color: var(--blue); }
+.auto-status-banner.target { border-color: var(--red-border); background: var(--red-bg); color: var(--red); }
+.auto-status-banner.turn   { border-color: var(--amber-border); background: var(--amber-bg); color: var(--amber); }
+.auto-status-banner.fire   { border-color: #fb923c; background: #fff7ed; color: #c2410c; }
+
+.auto-scan-dot {
+  width: 10px; height: 10px; margin-left: auto; border-radius: 50%;
+  background: var(--blue); box-shadow: 0 0 0 0 rgba(37,99,235,.5);
+  animation: auto-scan 1.4s ease-out infinite;
+}
+
+@keyframes auto-scan {
+  0%   { box-shadow: 0 0 0 0 rgba(37,99,235,.5); }
+  70%  { box-shadow: 0 0 0 10px rgba(37,99,235,0); }
+  100% { box-shadow: 0 0 0 0 rgba(37,99,235,0); }
+}
+
+.auto-chip-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
+
+.auto-chip {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 10px 6px;
+  border: 1.5px solid var(--line); border-radius: 10px;
+  background: var(--panel-2); color: var(--muted);
+  font-size: .72rem; font-weight: 700;
+}
+
+.auto-chip strong { font-size: .8rem; font-weight: 800; color: var(--soft); }
+.auto-chip.on { border-color: var(--red-border); background: var(--red-bg); color: var(--red); }
+.auto-chip.on strong { color: var(--red); }
+
+/* ── Auto: 90° turn calibration ── */
+.auto-cal {
+  display: flex; flex-direction: column; gap: 10px;
+  padding-top: 14px; border-top: 1.5px solid var(--line);
+}
+
+.auto-cal-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+
+.auto-cal-input {
+  display: flex; align-items: center; gap: 6px;
+  border: 1.5px solid var(--line-strong); border-radius: var(--radius-sm);
+  background: var(--panel); padding: 0 12px; min-height: 44px;
+}
+
+.auto-cal-input input {
+  width: 100%; min-height: unset; border: none; background: transparent;
+  box-shadow: none; padding: 0; font-size: .95rem; font-weight: 800; color: var(--text);
+}
+
+.auto-cal-input span { color: var(--muted); font-size: .8rem; font-weight: 700; }
+
+.auto-test-btn {
+  gap: 6px; font-size: .85rem; font-weight: 700;
+  border-color: var(--amber-border); background: var(--amber-bg); color: var(--amber);
+}
+
+.auto-test-btn:hover {
+  border-color: var(--amber); background: #fef3c7; color: #b45309;
+  box-shadow: 0 0 0 3px rgba(217,119,6,.12);
+}
+
+.auto-cal-hint {
+  display: flex; align-items: center; gap: 6px; margin: 0;
+  color: var(--muted); font-size: .76rem; font-weight: 500;
+}
 
 /* ── Responsive ── */
 @media (max-width: 1060px) {

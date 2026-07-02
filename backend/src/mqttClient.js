@@ -22,7 +22,8 @@ const inboundTopics = [
 const commandTopics = {
   command: 'robot/command',
   servoOy: 'robot/servo/oy',
-  servoOz: 'robot/servo/oz'
+  servoOz: 'robot/servo/oz',
+  mode: 'robot/mode'
 };
 
 let mqttClient;
@@ -195,6 +196,9 @@ export function initMqtt(io) {
   mqttClient.on('connect', () => {
     robotState.mqttConnected = true;
     mqttClient.subscribe(inboundTopics);
+    // Keep the broker's retained mode in sync with the backend on (re)connect, so a
+    // motion worker that subscribes later immediately gets the correct mode.
+    mqttClient.publish(commandTopics.mode, robotState.mode, { retain: true });
     addEvent('status', `MQTT connected to ${config.mqttUrl}`);
     emitState(io);
   });
@@ -229,8 +233,25 @@ export function publishCommand(command) {
     throw new Error('MQTT broker is not connected');
   }
 
-  mqttClient.publish(commandTopics.command, String(command));
-  return addEvent('command', String(command), { topic: commandTopics.command });
+  const cmd = String(command);
+  // In auto mode the robot drives itself — drop stray manual commands, but let the
+  // `auto:` calibration commands (turn_ms / test_turn) through.
+  if (robotState.mode === 'auto' && !cmd.startsWith('auto:')) {
+    return addEvent('command', `ignored in auto: ${cmd}`, { topic: commandTopics.command });
+  }
+
+  mqttClient.publish(commandTopics.command, cmd);
+  return addEvent('command', cmd, { topic: commandTopics.command });
+}
+
+export function publishMode(mode) {
+  if (!mqttClient?.connected) {
+    throw new Error('MQTT broker is not connected');
+  }
+
+  // Retained so a motion worker that connects later picks up the current mode.
+  mqttClient.publish(commandTopics.mode, String(mode), { retain: true });
+  return addEvent('command', `mode -> ${mode}`, { topic: commandTopics.mode });
 }
 
 const SERVO_LIMITS = {

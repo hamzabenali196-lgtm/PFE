@@ -1,6 +1,8 @@
 const MAX_EVENTS = 50;
 
 export const robotState = {
+  mode: 'manual',            // 'manual' | 'auto'  (auto = autonomous patrol)
+  auto: { turnMs: 1500 },    // tunable ~90° right-turn duration for auto mode
   mqttConnected: false,
   liveFrame: null,
   lastPhoto: null,

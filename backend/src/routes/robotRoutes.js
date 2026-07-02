@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { deleteHistoryItem, getHistoryItems } from '../historyStore.js';
 import { deleteRecording, getMicState, getRecordings, setMicEnabled, startRecording, stopRecording } from '../micService.js';
-import { publishCommand, publishServo } from '../mqttClient.js';
-import { robotState } from '../state.js';
+import { publishCommand, publishMode, publishServo } from '../mqttClient.js';
+import { addEvent, robotState } from '../state.js';
 import {
   deleteVideoRecording,
   getVideoRecordings,
@@ -151,6 +151,72 @@ export function createRobotRoutes(io) {
     } catch (error) {
       return res.status(503).json({ error: error.message });
     }
+  });
+
+  // ── Auto mode ────────────────────────────────────────────────────────────────
+  // Switching mode tells the motion worker (robot/mode, retained) AND toggles the
+  // always-on recording: auto records non-stop, manual hands recording back to the user.
+  router.post('/mode', async (req, res) => {
+    const mode = req.body?.mode;
+    if (!['manual', 'auto'].includes(mode)) {
+      return res.status(400).json({ error: 'mode must be manual or auto' });
+    }
+
+    robotState.mode = mode;
+
+    let warning;
+    try {
+      publishMode(mode);
+    } catch (error) {
+      warning = error.message;
+      addEvent('error', `mode publish failed: ${error.message}`);
+    }
+
+    try {
+      if (mode === 'auto') {
+        const micWasEnabled = getMicState().enabled;
+        await setMicEnabled(true);
+        await startVideoRecording({ stopMicAfter: !micWasEnabled });
+      } else {
+        const stopMicAfter = shouldStopMicAfterVideo();
+        await stopVideoRecording();
+        if (stopMicAfter) await setMicEnabled(false);
+      }
+    } catch (error) {
+      warning = warning || error.message;
+      addEvent('error', `auto recording toggle failed: ${error.message}`);
+    }
+
+    io.emit('robot:mode', { mode });
+    return res.json({ ok: true, mode, warning, video: getVideoState(), mic: getMicState() });
+  });
+
+  router.post('/auto/config', (req, res) => {
+    const turnMs = Number(req.body?.turnMs);
+    if (!Number.isFinite(turnMs) || turnMs < 200 || turnMs > 6000) {
+      return res.status(400).json({ error: 'turnMs must be between 200 and 6000' });
+    }
+
+    robotState.auto = { ...robotState.auto, turnMs: Math.round(turnMs) };
+    try { publishCommand(`auto:turn_ms:${robotState.auto.turnMs}`); } catch { /* MQTT down — UI value still saved */ }
+    io.emit('robot:auto', robotState.auto);
+    return res.json({ ok: true, auto: robotState.auto });
+  });
+
+  router.post('/auto/test-turn', (req, res) => {
+    const turnMs = Number(req.body?.turnMs);
+    if (Number.isFinite(turnMs) && turnMs >= 200 && turnMs <= 6000) {
+      robotState.auto = { ...robotState.auto, turnMs: Math.round(turnMs) };
+      io.emit('robot:auto', robotState.auto);
+    }
+
+    try {
+      publishCommand(`auto:turn_ms:${robotState.auto.turnMs}`);
+      publishCommand('auto:test_turn');
+    } catch (error) {
+      return res.status(503).json({ error: error.message });
+    }
+    return res.json({ ok: true, auto: robotState.auto });
   });
 
   return router;

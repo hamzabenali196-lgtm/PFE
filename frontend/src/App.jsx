@@ -2,11 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, Bot, Cpu, Film, Gamepad2, Server } from 'lucide-react';
 import { io } from 'socket.io-client';
 import AlertPanel from './components/AlertPanel.jsx';
+import AutoStatusPanel from './components/AutoStatusPanel.jsx';
 import ControlPanel from './components/ControlPanel.jsx';
 import DetectionHistory from './components/DetectionHistory.jsx';
 import LiveCamera from './components/LiveCamera.jsx';
 import LocationPanel from './components/LocationPanel.jsx';
 import MicPanel from './components/MicPanel.jsx';
+import ModeToggle from './components/ModeToggle.jsx';
+import DriveModeToggle from './components/DriveModeToggle.jsx';
 import StatusBadge from './components/StatusBadge.jsx';
 import VideoRecorder from './components/VideoRecorder.jsx';
 import {
@@ -14,7 +17,9 @@ import {
   deleteHistoryItem,
   deleteVideoRecording,
   getRobotState,
+  postAutoTestTurn,
   postMicEnabled,
+  postMode,
   postRobotCommand,
   postServo,
   startVideoRecording,
@@ -22,6 +27,9 @@ import {
 } from './lib/api.js';
 
 const initialRobotState = {
+  mode: 'manual',
+  driveMode: 'legs',
+  auto: { turnMs: 1500 },
   mqttConnected: false,
   liveFrame: null,
   lastPhoto: null,
@@ -54,6 +62,7 @@ export default function App() {
   const [notice, setNotice] = useState('');
   const [headPos, setHeadPos] = useState({ pan: 90, tilt: 60 });
   const [sideTab, setSideTab] = useState('controls');
+  const [autoTurnMs, setAutoTurnMs] = useState(initialRobotState.auto.turnMs);
   const lastSpokenRef = useRef('');
 
   const socket = useMemo(() => io(API_URL, { autoConnect: false }), []);
@@ -70,6 +79,10 @@ export default function App() {
 
     socket.on('robot:state', (payload) => {
       setRobot((current) => ({ ...current, ...payload }));
+    });
+
+    socket.on('robot:mode', ({ mode }) => {
+      setRobot((current) => ({ ...current, mode }));
     });
 
     socket.on('robot:frame', ({ image, frameCount, receivedAt }) => {
@@ -236,6 +249,22 @@ export default function App() {
     }
   }, []);
 
+  const handleSetMode = useCallback(async (mode) => {
+    setRobot((current) => ({ ...current, mode })); // optimistic — backend confirms via robot:mode
+    await runAction(() => postMode(mode));
+  }, []);
+
+  const handleSetDriveMode = useCallback(async (driveMode) => {
+    setRobot((current) => ({ ...current, driveMode })); // optimistic — sends "legs"/"motors" command
+    await runAction(() => postRobotCommand(driveMode));
+  }, []);
+
+  const handleTestTurn = useCallback(async () => {
+    await runAction(() => postAutoTestTurn(autoTurnMs));
+  }, [autoTurnMs]);
+
+  const isAuto = robot.mode === 'auto';
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -248,6 +277,9 @@ export default function App() {
             <h1>Spider Robot Control</h1>
           </div>
         </div>
+        <ModeToggle mode={robot.mode} onChange={handleSetMode} />
+        <DriveModeToggle driveMode={robot.driveMode} onChange={handleSetDriveMode} />
+
         <div className="header-status">
           <ConnectionPill icon={<Server size={14} />} label="Backend" connected={socketConnected} />
           <ConnectionPill icon={<Cpu size={14} />} label="MQTT" connected={robot.mqttConnected} />
@@ -257,6 +289,40 @@ export default function App() {
 
       {notice ? <div className="notice">{notice}</div> : null}
 
+      {isAuto ? (
+        <main className="dashboard-grid">
+          <div className="primary-stack">
+            <LiveCamera
+              frame={robot.liveFrame}
+              lastFrameAt={robot.lastFrameAt}
+              video={robot.video}
+              autoMode
+            />
+          </div>
+
+          <div className="side-stack">
+            <AutoStatusPanel
+              alert={robot.lastAlert}
+              fireAlert={robot.lastFireAlert}
+              obstacle={robot.lastObstacle}
+              recording={Boolean(robot.video?.recording)}
+              turnMs={autoTurnMs}
+              onTurnMsChange={setAutoTurnMs}
+              onTestTurn={handleTestTurn}
+            />
+            <VideoRecorder
+              video={robot.video}
+              videos={robot.videoRecordings}
+              onDelete={removeVideo}
+              readOnly
+            />
+          </div>
+
+          <div className="location-stack">
+            <LocationPanel location={robot.location} />
+          </div>
+        </main>
+      ) : (
       <main className="dashboard-grid">
         <div className="primary-stack">
           <LiveCamera
@@ -298,6 +364,7 @@ export default function App() {
               onDriveCommand={handleDriveCommand}
               headPos={headPos}
               onHeadMove={handleHeadMove}
+              driveMode={robot.driveMode}
             />
           )}
 
@@ -339,6 +406,7 @@ export default function App() {
           <LocationPanel location={robot.location} />
         </div>
       </main>
+      )}
     </div>
   );
 }

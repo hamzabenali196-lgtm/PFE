@@ -23,7 +23,8 @@ const ACTIONS = [
   { id: 'pulse',  label: 'Pulse',  icon: <ChevronsUp size={20} /> },
 ];
 
-export default function ControlPanel({ onHello, onDriveCommand, headPos, onHeadMove }) {
+export default function ControlPanel({ onHello, onDriveCommand, headPos, onHeadMove, driveMode = 'legs' }) {
+  const onMotors = driveMode === 'motors';
   const [active, setActive] = useState('');
   const activeRef = useRef('');
   const [speed, setSpeed] = useState(5);
@@ -83,34 +84,42 @@ export default function ControlPanel({ onHello, onDriveCommand, headPos, onHeadM
             <div className="dpad-center" aria-hidden="true" />
           </div>
 
-          <div className="height-controls" aria-label="Body height">
-            <button type="button" className="height-btn" onClick={() => onDriveCommand('height_down')} aria-label="Raise body">
-              <ArrowUp size={20} />
-              <span>High</span>
-            </button>
-            <button type="button" className="height-btn" onClick={() => onDriveCommand('height_up')} aria-label="Lower body">
-              <ArrowDown size={20} />
-              <span>Low</span>
-            </button>
-          </div>
+          {/* Body height only matters when walking — on motors the legs are
+              tucked up, so hide it. */}
+          {!onMotors && (
+            <div className="height-controls" aria-label="Body height">
+              <button type="button" className="height-btn" onClick={() => onDriveCommand('height_down')} aria-label="Raise body">
+                <ArrowUp size={20} />
+                <span>High</span>
+              </button>
+              <button type="button" className="height-btn" onClick={() => onDriveCommand('height_up')} aria-label="Lower body">
+                <ArrowDown size={20} />
+                <span>Low</span>
+              </button>
+            </div>
+          )}
         </div>
 
-        <div className="speed-control">
-          <div className="speed-header">
-            <Gauge size={14} aria-hidden="true" />
-            <span className="speed-label">Speed</span>
-            <span className="speed-value">{speed}<span className="speed-max">/10</span></span>
+        {/* Speed only matters when walking — the DC motors run at full power
+            (no PWM speed control), so hide the slider on motors. */}
+        {!onMotors && (
+          <div className="speed-control">
+            <div className="speed-header">
+              <Gauge size={14} aria-hidden="true" />
+              <span className="speed-label">Speed</span>
+              <span className="speed-value">{speed}<span className="speed-max">/10</span></span>
+            </div>
+            <input
+              type="range" min="1" max="10" step="1"
+              value={speed}
+              onChange={handleSpeedChange}
+              className="speed-slider"
+              style={{ '--pct': `${(speed - 1) / 9 * 100}%` }}
+              aria-label="Robot speed"
+            />
+            <div className="speed-markers"><span>Slow</span><span>Fast</span></div>
           </div>
-          <input
-            type="range" min="1" max="10" step="1"
-            value={speed}
-            onChange={handleSpeedChange}
-            className="speed-slider"
-            style={{ '--pct': `${(speed - 1) / 9 * 100}%` }}
-            aria-label="Robot speed"
-          />
-          <div className="speed-markers"><span>Slow</span><span>Fast</span></div>
-        </div>
+        )}
       </div>
 
       {/* ── Section 2: Head Camera ── */}

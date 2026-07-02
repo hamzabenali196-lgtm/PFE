@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
 import base64
-import pickle
-import socket
-import struct
 import time
 
 import cv2
@@ -10,7 +7,6 @@ import numpy as np
 import paho.mqtt.client as mqtt
 
 # --- CONFIGURATION ---
-PC_IP = '192.168.72.21'
 MQTT_HOST = "localhost"
 MQTT_PORT = 1883
 COORDS = "35.7649,10.8062"
@@ -160,6 +156,8 @@ def main():
     fire_absent_since  = time.time()  # timestamp flame first disappeared (None = present)
 
     last_ir_print = 0.0                # throttle timestamp for the IR obstacle print
+    last_ir_pub   = 0.0                # last obstacle publish time (heartbeat)
+    last_ir_state = None               # last published "1"/"0" (publish promptly on change)
 
     print("Robot Spider en ligne - Dashboard MQTT actif")
 
@@ -167,7 +165,14 @@ def main():
         while True:
             ret, frame = cap.read()
             if not ret:
-                break
+                # A single dropped/again-busy USB frame must NOT kill vision for good.
+                # Back off briefly, re-open the camera if it actually dropped, keep going.
+                print("Camera read failed - retrying...")
+                time.sleep(0.5)
+                if not cap.isOpened():
+                    cap.release()
+                    cap = cv2.VideoCapture(0)
+                continue
 
             (h, w) = frame.shape[:2]
 
@@ -177,14 +182,28 @@ def main():
             detections = face_net.forward()
 
             nb_faces = 0
+            biggest_face = None
+            biggest_face_area = 0
             for i in range(0, detections.shape[2]):
                 if detections[0, 0, i, 2] > FACE_CONFIDENCE:
                     nb_faces += 1
                     box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
                     (sX, sY, eX, eY) = box.astype("int")
+                    area = (eX - sX) * (eY - sY)
+                    if area > biggest_face_area:
+                        biggest_face_area = area
+                        biggest_face = (sX, sY, eX, eY)
                     cv2.rectangle(frame, (sX, sY), (eX, eY), (0, 200, 0), 2)
                     cv2.putText(frame, "visage", (sX, max(20, sY - 8)),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 200, 0), 2)
+
+            # Publish the main face centre (normalized to [-1, 1], 0,0 = frame centre) so
+            # auto mode can steer toward a detected human — mirrors robot/feu_position.
+            if biggest_face is not None:
+                (sX, sY, eX, eY) = biggest_face
+                vx_norm = (sX + eX) / 2 / w * 2 - 1
+                vy_norm = (sY + eY) / 2 / h * 2 - 1
+                client_mqtt.publish("robot/visage_position", f"{vx_norm:.3f},{vy_norm:.3f}")
 
             # --- Flame detection (HSV color, every frame — fast enough for head tracking) ---
             flame_boxes = detect_flame(frame)
@@ -212,12 +231,22 @@ def main():
                 fy_norm = (by + bh / 2) / h * 2 - 1
                 client_mqtt.publish("robot/feu_position", f"{fx_norm:.3f},{fy_norm:.3f}")
 
-            # --- IR obstacle check (throttled so it doesn't flood the log) ---
+            # --- IR obstacle check ---
+            # Publish promptly when the state flips (so auto mode stops fast), plus a
+            # heartbeat every IR_PERIOD; keep the console print throttled to IR_PERIOD.
+            obstacle = read_ir_obstacle()
+            if obstacle is not None:
+                state = "1" if obstacle else "0"
+                if state != last_ir_state or now - last_ir_pub >= IR_PERIOD:
+                    client_mqtt.publish("robot/obstacle", state)
+                    last_ir_pub = now
+                    last_ir_state = state
             if now - last_ir_print >= IR_PERIOD:
                 last_ir_print = now
-                obstacle = print_ir()
-                if obstacle is not None:
-                    client_mqtt.publish("robot/obstacle", "1" if obstacle else "0")
+                if obstacle is None:
+                    print("Capteur IR : indisponible")
+                else:
+                    print("Capteur IR : OBSTACLE detecte" if obstacle else "Capteur IR : voie libre")
 
             presence_humaine = nb_faces > 0
 
@@ -267,16 +296,6 @@ def main():
                 msg_feu = "Aucun feu detecte"
                 client_mqtt.publish("robot/feu", msg_feu)
                 print(f"Etat : {msg_feu}")
-
-            try:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    s.settimeout(0.01)
-                    s.connect((PC_IP, 5005))
-                    _, jpg = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 40])
-                    data = pickle.dumps([jpg, f"DATA:{int(presence_humaine)}"])
-                    s.sendall(struct.pack("Q", len(data)) + data)
-            except:
-                pass
 
             time.sleep(0.03)
 

@@ -1,4 +1,4 @@
-import { Camera, Clock3, Expand, Minimize2, Radio, Square } from 'lucide-react';
+import { Bot, Camera, Clock3, Expand, Minimize2, Radio, Square } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 const ARROW_TO_CONTROL = {
@@ -18,13 +18,15 @@ const CONTROL_COMMANDS = {
   D: 'right'
 };
 
-export default function LiveCamera({ frame, lastFrameAt, video, onDriveCommand }) {
+export default function LiveCamera({ frame, lastFrameAt, video, onDriveCommand, autoMode = false }) {
   const recording = Boolean(video?.recording);
   const shellRef = useRef(null);
   const [isFullscreenFallback, setIsFullscreenFallback] = useState(false);
   const activeControlRef = useRef('');
 
   useEffect(() => {
+    if (autoMode) return; // manual keyboard drive is disabled while the robot drives itself
+
     function handleKeyDown(event) {
       const control = getKeyboardControl(event);
       if (!control) return;
@@ -56,7 +58,7 @@ export default function LiveCamera({ frame, lastFrameAt, video, onDriveCommand }
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('blur', handleWindowBlur);
     };
-  }, [onDriveCommand]);
+  }, [onDriveCommand, autoMode]);
 
   useEffect(() => {
     function handleFullscreenChange() {
@@ -107,6 +109,12 @@ export default function LiveCamera({ frame, lastFrameAt, video, onDriveCommand }
               <Radio size={14} aria-hidden="true" />
               {frame ? 'Live' : 'Offline'}
             </span>
+            {autoMode ? (
+              <span className="video-state auto">
+                <Bot size={13} aria-hidden="true" />
+                Auto
+              </span>
+            ) : null}
             {recording ? (
               <span className="video-state recording">
                 <Square size={13} aria-hidden="true" />

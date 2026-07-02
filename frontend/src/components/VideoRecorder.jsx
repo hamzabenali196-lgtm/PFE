@@ -1,7 +1,7 @@
 import { Download, Film, Square, Trash2, Video } from 'lucide-react';
 import { API_URL } from '../lib/api.js';
 
-export default function VideoRecorder({ video, videos, onStart, onStop, onDelete }) {
+export default function VideoRecorder({ video, videos, onStart, onStop, onDelete, readOnly = false }) {
   const recording = Boolean(video?.recording);
 
   return (
@@ -9,25 +9,35 @@ export default function VideoRecorder({ video, videos, onStart, onStop, onDelete
       <div className="panel-heading">
         <div>
           <p className="eyebrow">Media</p>
-          <h2>Recorder</h2>
+          <h2>{readOnly ? 'Recordings' : 'Recorder'}</h2>
         </div>
         <Film size={22} aria-hidden="true" />
       </div>
 
-      <div className="audio-row">
-        <button
-          type="button"
-          className={recording ? 'active record-button' : 'record-button'}
-          onClick={recording ? onStop : onStart}
-          aria-pressed={recording}
-        >
-          {recording ? <Square size={18} aria-hidden="true" /> : <Video size={18} aria-hidden="true" />}
-          <span>{recording ? 'Stop record' : 'Record'}</span>
-        </button>
-        <strong className={recording ? 'recording-state active' : 'recording-state'}>
-          {recording ? 'Recording' : `${videos?.length || 0} saved`}
-        </strong>
-      </div>
+      {readOnly ? (
+        <div className="audio-row">
+          <strong className={recording ? 'recording-state active' : 'recording-state'}>
+            {recording ? <Video size={16} aria-hidden="true" /> : null}
+            {recording ? 'Auto-recording' : 'Recording paused'}
+          </strong>
+          <strong className="recording-state">{videos?.length || 0} saved</strong>
+        </div>
+      ) : (
+        <div className="audio-row">
+          <button
+            type="button"
+            className={recording ? 'active record-button' : 'record-button'}
+            onClick={recording ? onStop : onStart}
+            aria-pressed={recording}
+          >
+            {recording ? <Square size={18} aria-hidden="true" /> : <Video size={18} aria-hidden="true" />}
+            <span>{recording ? 'Stop record' : 'Record'}</span>
+          </button>
+          <strong className={recording ? 'recording-state active' : 'recording-state'}>
+            {recording ? 'Recording' : `${videos?.length || 0} saved`}
+          </strong>
+        </div>
+      )}
 
       {video?.error ? <p className="mic-error">{video.error}</p> : null}
 

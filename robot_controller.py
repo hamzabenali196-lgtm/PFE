@@ -529,6 +529,11 @@ class SpiderRobotController:
     def stand(self, time_ms: int = 700, height: int = STAND_HEIGHT, ground_knee: int = KNEE_GROUND) -> None:
         self.move_all(LegPose(HIP_NEUTRAL, ground_knee, height), time_ms=time_ms)
 
+    def legs_up(self, time_ms: int = 400, knee: int = KNEE_LIFT, ankle: int = ANKLE_LIFT) -> None:
+        """Tuck all six legs up off the ground (hips neutral, knees + ankles
+        lifted) so the robot rests on its wheels for motor-driven movement."""
+        self.move_all(LegPose(HIP_NEUTRAL, knee, ankle), time_ms=time_ms)
+
 
 # ------------------------------------------------------------------
     # Expressive actions
