@@ -2,6 +2,7 @@ import mqtt from 'mqtt';
 import { config } from './config.js';
 import { clearHistoryStore, getHistoryItems, saveDetectionScreenshot } from './historyStore.js';
 import { clearRecordings } from './micService.js';
+import { speak } from './speakerService.js';
 import { addEvent, parseLocation, robotState } from './state.js';
 import { clearVideoRecordings, handleVideoFrame } from './videoService.js';
 
@@ -102,6 +103,7 @@ async function handleMessage(io, topic, payload) {
 
   if (topic === 'robot/feu') {
     const detected = !text.toLowerCase().includes('aucun');
+    if (detected) speak(text);   // announce fire on the robot's BT speaker
     robotState.lastFireAlert = { text, topic, receivedAt: now, detected };
     robotState.lastFireAlertAt = now;
     if (!detected) {
@@ -137,6 +139,7 @@ async function handleMessage(io, topic, payload) {
     if (shouldIgnoreDuplicateAlert(text)) return;
 
     const detected = isDetectionText(text);
+    if (detected) speak(text);   // same voice alert, but from the robot itself
     robotState.lastAlert = { text, topic, receivedAt: now, detected };
     robotState.lastAlertAt = now;
     const event = detected ? addEvent('alert', text, { topic }) : addEvent('clear', text, { topic });
@@ -181,6 +184,15 @@ async function handleMessage(io, topic, payload) {
   }
 
   if (topic === 'robot/motion/event') {
+    // alert:fire / alert:human = robot halted, awaiting operator approval;
+    // alert:granted / alert:clear = halt over. Drives the big dashboard alert.
+    if (text.startsWith('alert:')) {
+      const kind = text.slice('alert:'.length);
+      robotState.motionAlert = (kind === 'fire' || kind === 'human')
+        ? { kind, receivedAt: now }
+        : null;
+      io.emit('robot:motion_alert', robotState.motionAlert);
+    }
     const event = addEvent('command', `motion ${text}`, { topic });
     io.emit('robot:event', event);
     emitState(io);
@@ -256,7 +268,7 @@ export function publishMode(mode) {
 
 const SERVO_LIMITS = {
   oy: { min: 0, max: 120 },
-  oz: { min: 30, max: 150 },
+  oz: { min: 10, max: 170 },  // must match the UI pan slider range
 };
 
 export function publishServo(axis, value) {

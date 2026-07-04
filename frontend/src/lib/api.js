@@ -1,6 +1,8 @@
-const defaultApiUrl = `${window.location.protocol}//${window.location.hostname || 'localhost'}:4000`;
-
-export const API_URL = (import.meta.env.VITE_API_URL || defaultApiUrl).replace(/\/$/, '');
+// Same origin by default: the Vite dev server proxies /api, /socket.io and the
+// media paths to the backend on :4000. One origin keeps HTTPS simple (the
+// browser mic used by the Talk button requires a secure context, and an https
+// page may not call a plain-http backend).
+export const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 
 export async function getRobotState() {
   const response = await fetch(`${API_URL}/api/robot/state`);

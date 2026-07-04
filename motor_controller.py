@@ -29,7 +29,7 @@ import time
 # --- BCM GPIO pin map -> L298N inputs --------------------------------------
 # Verified live with test_motors.py (toggle each pin, watch the wheel). EN
 # carries speed (software PWM on these pins); the INx pins set direction.
-# Avoids pins the project already uses: UART (GPIO14/15) and IR sensor (GPIO23).
+# Avoids pins the project already uses: UART (GPIO14/15) and IR sensors (GPIO23, GPIO16).
 LEFT_IN1,  LEFT_IN2,  LEFT_EN  = 27, 21, 17   # Motor A  (left wheel)
 RIGHT_IN1, RIGHT_IN2, RIGHT_EN = 24, 22, 20   # Motor B  (right wheel)
 
@@ -177,11 +177,12 @@ class MotorDrive:
         s = self._duty
 
         # (left, right) signed speeds: +1 ahead, -1 back.
+        # forward/backward swapped here (not via *_INVERT) so left/right spin-in-place stays unaffected.
         plan = {
-            "forward":  (+s, +s),
-            "backward": (-s, -s),
-            "left":     (-s, +s),
-            "right":    (+s, -s),
+            "forward":  (-s, -s),
+            "backward": (+s, +s),
+            "left":     (+s, -s),
+            "right":    (-s, +s),
         }.get(direction)
 
         if plan is None:
@@ -292,9 +293,9 @@ if __name__ == "__main__":
 #    Remove the ENA/ENB *signal* jumpers (the ones tying ENA/ENB to +5V) so the
 #    Pi's PWM controls speed. (Different from the "5V-EN" power jumper above.)
 #
-#  These six pins avoid the UART (GPIO14/15 -> servo bus) and the IR sensor
-#  (GPIO23) the project already uses. EN on 17/20 use software PWM (fine on the
-#  Pi 5's lgpio backend); set MOTOR_PWM=False for plain full-on if you prefer.
+#  These six pins avoid the UART (GPIO14/15 -> servo bus) and the IR sensors
+#  (GPIO23, GPIO16) the project already uses. EN on 17/20 use software PWM (fine
+#  on the Pi 5's lgpio backend); set MOTOR_PWM=False for plain full-on if you prefer.
 #
 #  Quick test (stop the motion worker first — it holds these pins):
 #    python3 motor_controller.py            # with PWM speed control

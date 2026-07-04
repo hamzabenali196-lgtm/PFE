@@ -1055,6 +1055,10 @@ button:disabled { cursor: not-allowed; opacity: .45; box-shadow: none; }
   border-color: var(--green-border); background: var(--green-bg); color: var(--green);
 }
 
+.mic-toggle.talking {
+  border-color: var(--blue-border); background: var(--blue-bg); color: var(--blue);
+}
+
 .audio-row {
   display: grid; grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px; margin-bottom: 12px;
@@ -1360,3 +1364,66 @@ button:disabled { cursor: not-allowed; opacity: .45; box-shadow: none; }
   .recording-item div, .video-item div { grid-column: 1 / -1; grid-row: 2; }
   .video-topbar, .video-bottombar { left: 8px; right: 8px; }
 }
+
+/* ── Motion alert: full-screen halt overlay (fire/human found in auto mode) ── */
+.motion-alert-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: motion-alert-flash 1s ease-in-out infinite;
+}
+
+.motion-alert-overlay.fire { background: rgba(190, 18, 18, 0.82); }
+.motion-alert-overlay.human { background: rgba(180, 95, 6, 0.82); }
+
+@keyframes motion-alert-flash {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(0.72); }
+}
+
+.motion-alert-box {
+  background: var(--panel);
+  border-radius: 20px;
+  padding: 40px 48px;
+  max-width: 480px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.motion-alert-icon { color: #dc2626; animation: motion-alert-pulse 1s ease-in-out infinite; }
+.motion-alert-overlay.human .motion-alert-icon { color: #d97706; }
+
+@keyframes motion-alert-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
+.motion-alert-box h2 {
+  margin: 14px 0 8px;
+  font-size: 30px;
+  letter-spacing: 2px;
+  color: #b91c1c;
+}
+.motion-alert-overlay.human .motion-alert-box h2 { color: #b45309; }
+
+.motion-alert-box p { margin: 0 0 24px; font-size: 15px; opacity: 0.8; }
+
+.motion-alert-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 26px;
+  border: none;
+  border-radius: 12px;
+  background: #16a34a;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.motion-alert-btn:hover { background: #15803d; }

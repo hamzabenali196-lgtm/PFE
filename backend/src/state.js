@@ -11,6 +11,7 @@ export const robotState = {
   lastFirePhoto: null,
   lastFireAlertAt: null,
   lastObstacle: null,
+  motionAlert: null,         // { kind: 'fire'|'human', receivedAt } while the robot is halted awaiting auto:resume
   location: null,
   frameCount: 0,
   lastFrameAt: null,
@@ -33,6 +34,10 @@ export const robotState = {
     recording: false,
     error: null,
     updatedAt: null
+  },
+  speaker: {
+    talking: false,   // an operator is streaming their voice to the BT speaker
+    error: null
   }
 };
 

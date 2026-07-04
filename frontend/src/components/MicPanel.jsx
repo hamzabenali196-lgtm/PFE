@@ -1,7 +1,8 @@
-import { Mic, MicOff, RadioTower } from 'lucide-react';
+import { Mic, MicOff, PhoneCall, PhoneOff, RadioTower } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const TALK_SAMPLE_RATE = 16000;
 
 export default function MicPanel({
   mic,
@@ -12,9 +13,12 @@ export default function MicPanel({
   const [listening, setListening] = useState(false);
   const [monitoring, setMonitoring] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [talking, setTalking] = useState(false);
+  const [talkError, setTalkError] = useState('');
   const recognitionRef = useRef(null);
   const audioContextRef = useRef(null);
   const nextPlayTimeRef = useRef(0);
+  const talkRef = useRef(null);
   const enabled = Boolean(mic?.enabled);
   const speechSupported = Boolean(SpeechRecognition);
 
@@ -110,6 +114,73 @@ export default function MicPanel({
     return audioContextRef.current;
   }
 
+  // ── Talk: stream the operator's mic to the robot's Bluetooth speaker ──
+  useEffect(() => () => stopTalk(), []); // release the mic on unmount
+
+  async function startTalk() {
+    if (!socket) return;
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setTalkError(
+        'Browser mic needs a secure context. Open the dashboard over HTTPS, or in Chrome add '
+        + 'this URL under chrome://flags/#unsafely-treat-insecure-origin-as-secure.'
+      );
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      });
+
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      const ctx = new AudioContext({ sampleRate: TALK_SAMPLE_RATE });
+      if (ctx.state === 'suspended') await ctx.resume();
+
+      const source = ctx.createMediaStreamSource(stream);
+      const processor = ctx.createScriptProcessor(4096, 1, 1);
+
+      processor.onaudioprocess = (event) => {
+        const input = downsample(event.inputBuffer.getChannelData(0), ctx.sampleRate);
+        const pcm = new Int16Array(input.length);
+        for (let index = 0; index < input.length; index += 1) {
+          const sample = Math.max(-1, Math.min(1, input[index]));
+          pcm[index] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+        }
+        socket.emit('robot:talk:audio', pcm.buffer);
+      };
+
+      source.connect(processor);
+      processor.connect(ctx.destination); // required for onaudioprocess; outputs silence
+
+      socket.emit('robot:talk:start', (response) => {
+        if (response && !response.ok) {
+          setTalkError(response.error || 'Robot speaker unavailable');
+          stopTalk();
+        }
+      });
+
+      talkRef.current = { ctx, stream, source, processor };
+      setTalking(true);
+      setTalkError('');
+    } catch (error) {
+      setTalkError(`Browser mic unavailable: ${error.message}`);
+    }
+  }
+
+  function stopTalk() {
+    const talk = talkRef.current;
+    talkRef.current = null;
+    setTalking(false);
+    if (!talk) return;
+
+    socket?.emit('robot:talk:stop');
+    talk.processor.disconnect();
+    talk.source.disconnect();
+    talk.stream.getTracks().forEach((track) => track.stop());
+    talk.ctx.close();
+  }
+
   return (
     <section className="tool-panel mic-panel">
       <div className="panel-heading">
@@ -134,6 +205,16 @@ export default function MicPanel({
         <span>{enabled ? 'Deactivate mic' : 'Activate mic & monitor'}</span>
       </button>
 
+      <button
+        type="button"
+        className={talking ? 'mic-toggle talking' : 'mic-toggle'}
+        onClick={() => (talking ? stopTalk() : startTalk())}
+        aria-pressed={talking}
+      >
+        {talking ? <PhoneOff size={18} aria-hidden="true" /> : <PhoneCall size={18} aria-hidden="true" />}
+        <span>{talking ? 'Stop talking' : 'Talk through robot'}</span>
+      </button>
+
       <div className="mic-meter" aria-label="Microphone level">
         <span style={{ width: `${Math.round((mic?.level || 0) * 100)}%` }} />
       </div>
@@ -143,14 +224,31 @@ export default function MicPanel({
           <RadioTower size={17} aria-hidden="true" />
           <span>{mic?.device || 'No USB device selected'}</span>
         </div>
-        <strong>{enabled ? 'Monitoring audio' : 'Mic off'}</strong>
+        <strong>
+          {talking
+            ? 'Your voice → robot speaker'
+            : enabled ? 'Monitoring audio' : 'Mic off'}
+        </strong>
       </div>
 
       {transcript ? <p className="mic-transcript">{transcript}</p> : null}
       {mic?.error ? <p className="mic-error">{mic.error}</p> : null}
+      {talkError ? <p className="mic-error">{talkError}</p> : null}
       {!speechSupported ? <p className="mic-error">Speech commands are not supported by this browser.</p> : null}
     </section>
   );
+}
+
+// Most browsers honor the 16 kHz AudioContext and this is a no-op; if the
+// context runs at its hardware rate instead, decimate down to 16 kHz.
+function downsample(input, fromRate) {
+  if (fromRate === TALK_SAMPLE_RATE) return input;
+  const ratio = fromRate / TALK_SAMPLE_RATE;
+  const output = new Float32Array(Math.floor(input.length / ratio));
+  for (let index = 0; index < output.length; index += 1) {
+    output[index] = input[Math.floor(index * ratio)];
+  }
+  return output;
 }
 
 async function toUint8Array(chunk) {

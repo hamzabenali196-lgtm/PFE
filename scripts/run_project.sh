@@ -3,6 +3,10 @@ set -o pipefail
 
 PROJECT_DIR="/home/pi/PFE"
 
+# Sound/speaker output (paplay/pacat/espeak) goes through the user's PipeWire
+# session; systemd doesn't set this, and without it every audio call fails.
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+
 # PIDs of the processes we launch directly (npm, python, ...). Each of these may
 # fork grandchildren — npm -> nodemon -> node, vite -> esbuild — so on shutdown we
 # must kill the WHOLE tree, not just these PIDs. A plain `kill $pid` left those

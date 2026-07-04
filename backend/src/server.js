@@ -6,6 +6,7 @@ import { config } from './config.js';
 import { getHistoryItems, initHistoryStore, screenshotsDir } from './historyStore.js';
 import { initMic, recordingsDir } from './micService.js';
 import { initMqtt, publishCommand, publishServo } from './mqttClient.js';
+import { attachTalkHandlers, initSpeaker } from './speakerService.js';
 import { createRobotRoutes } from './routes/robotRoutes.js';
 import { robotState } from './state.js';
 import { initVideoRecorder, videosDir } from './videoService.js';
@@ -42,6 +43,7 @@ app.use('/api/robot', createRobotRoutes(io));
 
 io.on('connection', (socket) => {
   socket.emit('robot:state', robotState);
+  attachTalkHandlers(socket);
 
   socket.on('robot:command', (command, callback) => {
     try {
@@ -68,6 +70,7 @@ await initHistoryStore();
 robotState.history = getHistoryItems();
 await initMic(io);
 await initVideoRecorder(io);
+initSpeaker(io);
 initMqtt(io);
 
 httpServer.listen(config.port, '0.0.0.0', () => {

@@ -35,6 +35,13 @@ ANKLE_LIFT = 800
 KNEE_GROUND = CENTER
 LEG_UP = KNEE_LIFT
 
+# Motors-mode tuck: how far the legs fold up off the ground when resting on the
+# wheels. Separate from KNEE_LIFT/ANKLE_LIFT above (walking-gait foot clearance)
+# so tuning one doesn't change the other. Lower = tucked higher; raise these
+# values back toward CENTER (1500) if the legs go up too far / bind.
+MOTORS_KNEE_LIFT = 500
+MOTORS_ANKLE_LIFT = 500
+
 # ---------------------------------------------------------------------------
 # Robot layout
 # ---------------------------------------------------------------------------
@@ -529,7 +536,7 @@ class SpiderRobotController:
     def stand(self, time_ms: int = 700, height: int = STAND_HEIGHT, ground_knee: int = KNEE_GROUND) -> None:
         self.move_all(LegPose(HIP_NEUTRAL, ground_knee, height), time_ms=time_ms)
 
-    def legs_up(self, time_ms: int = 400, knee: int = KNEE_LIFT, ankle: int = ANKLE_LIFT) -> None:
+    def legs_up(self, time_ms: int = 400, knee: int = MOTORS_KNEE_LIFT, ankle: int = MOTORS_ANKLE_LIFT) -> None:
         """Tuck all six legs up off the ground (hips neutral, knees + ankles
         lifted) so the robot rests on its wheels for motor-driven movement."""
         self.move_all(LegPose(HIP_NEUTRAL, knee, ankle), time_ms=time_ms)
@@ -541,7 +548,7 @@ class SpiderRobotController:
 
     def say_hi(
         self,
-        leg_name: str = "leg_6",
+        leg_name: str = "leg_4",  # right FRONT leg (leg_6 is the right rear)
         waves: int = 4,
         time_ms: int = 500,
     ) -> None:
@@ -779,7 +786,7 @@ def create_robot(port: str = "/dev/ttyAMA0", baud: int = 9600) -> SpiderRobotCon
 RUN_PORT = "/dev/ttyAMA0"
 RUN_BAUD = 9600
 RUN_ACTION = "forward"  # stand | hi | bow | shake | wave | forward | backward | left | right
-RUN_LEG = "leg_6"
+RUN_LEG = "leg_4"
 RUN_STEPS = 1
 RUN_LOOP = True
 RUN_MOVE_TIME_MS = 400

@@ -10,8 +10,10 @@ import LocationPanel from './components/LocationPanel.jsx';
 import MicPanel from './components/MicPanel.jsx';
 import ModeToggle from './components/ModeToggle.jsx';
 import DriveModeToggle from './components/DriveModeToggle.jsx';
+import MotionAlertOverlay from './components/MotionAlertOverlay.jsx';
 import StatusBadge from './components/StatusBadge.jsx';
 import VideoRecorder from './components/VideoRecorder.jsx';
+import { startAlarm, stopAlarm } from './lib/alarm.js';
 import {
   API_URL,
   deleteHistoryItem,
@@ -37,6 +39,7 @@ const initialRobotState = {
   lastFireAlert: null,
   lastFirePhoto: null,
   lastObstacle: null,
+  motionAlert: null,
   location: null,
   frameCount: 0,
   lastFrameAt: null,
@@ -65,7 +68,7 @@ export default function App() {
   const [autoTurnMs, setAutoTurnMs] = useState(initialRobotState.auto.turnMs);
   const lastSpokenRef = useRef('');
 
-  const socket = useMemo(() => io(API_URL, { autoConnect: false }), []);
+  const socket = useMemo(() => io(API_URL || undefined, { autoConnect: false }), []);
 
   useEffect(() => {
     getRobotState()
@@ -134,6 +137,10 @@ export default function App() {
       setRobot((current) => ({ ...current, lastObstacle: obstacle }));
     });
 
+    socket.on('robot:motion_alert', (motionAlert) => {
+      setRobot((current) => ({ ...current, motionAlert }));
+    });
+
     socket.on('robot:history:add', (item) => {
       setRobot((current) => ({
         ...current,
@@ -154,6 +161,17 @@ export default function App() {
       socket.disconnect();
     };
   }, [socket]);
+
+  // Siren follows the halt-alert: sounds while the robot is stopped waiting
+  // for authorization, silent otherwise (and on unmount).
+  useEffect(() => {
+    if (robot.motionAlert) {
+      startAlarm();
+    } else {
+      stopAlarm();
+    }
+    return stopAlarm;
+  }, [robot.motionAlert]);
 
   useEffect(() => {
     const text = robot.lastAlert?.text;
@@ -263,6 +281,14 @@ export default function App() {
     await runAction(() => postAutoTestTurn(autoTurnMs));
   }, [autoTurnMs]);
 
+  const handleAuthorizeMove = useCallback(async () => {
+    await runAction(async () => {
+      await postRobotCommand('auto:resume');
+      // Close optimistically; the worker's alert:granted event confirms it.
+      setRobot((current) => ({ ...current, motionAlert: null }));
+    });
+  }, []);
+
   const isAuto = robot.mode === 'auto';
 
   return (
@@ -288,6 +314,8 @@ export default function App() {
       </header>
 
       {notice ? <div className="notice">{notice}</div> : null}
+
+      <MotionAlertOverlay alert={robot.motionAlert} onAuthorize={handleAuthorizeMove} />
 
       {isAuto ? (
         <main className="dashboard-grid">

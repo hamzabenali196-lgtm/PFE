@@ -13,6 +13,7 @@ from motor_controller import create_motor_drive
 from robot_controller import (
     ANKLE_LIFT, KNEE_GROUND, KNEE_LIFT, RUN_STEP_TIME_MS, STAND_HEIGHT, create_robot,
 )
+from robot_sounds import SoundPlayer
 
 
 MQTT_HOST = "localhost"
@@ -21,6 +22,10 @@ ROBOT_PORT = "/dev/ttyAMA0"
 ROBOT_BAUD = 9600
 ROBOT_MOVE_TIME_MS = 250
 ROBOT_STAND_TIME_MS = 120
+# Slow, gentle posture change for legs-up/legs-down when switching drive mode
+# or auto/manual. Must NOT be used in the d-pad path: stand() blocks for the
+# full duration, so a long time here makes every button press feel laggy.
+ROBOT_SETTLE_TIME_MS = 1200
 ROBOT_STEP_TIME_MS = RUN_STEP_TIME_MS
 
 COMMAND_TOPIC = "robot/command"
@@ -34,6 +39,10 @@ HUMAN_POS_TOPIC = "robot/visage_position"
 HEAD_SERVO_OY = 19   # tilt (up / down)
 HEAD_SERVO_OZ = 20   # pan  (left / right)
 HEAD_MOVE_TIME_MS = 200
+# Bias the whole tilt range upward (the camera aimed too low at every slider
+# position, center included). Lower logical oy = up, so this is subtracted in
+# move_head. Increase to aim higher still; set to 0 to disable.
+HEAD_TILT_UP_OFFSET_DEG = -80
 
 
 def angle_to_lobot(angle: float) -> int:
@@ -131,13 +140,21 @@ ONE_SHOT_COMMANDS = {
 # --- Autonomous (auto) mode ---------------------------------------------------
 AUTO_TURN_MS_DEFAULT = 1500   # ~90° right-turn duration (calibrated live via auto:turn_ms)
 AUTO_HEAD_SCAN = True         # the HEAD pans to search; the BODY only turns on an obstacle
-SCAN_PERIOD_S = 1.2           # seconds between head-sweep steps while searching
-SCAN_PAN_ANGLES = (60, 90, 120, 90)   # left, center, right, center (head pan = servo oz)
+SCAN_SPEED_DEG_S = 25         # smooth sweep speed: full PAN_MIN..PAN_MAX pass in ~6.4 s
 TARGET_FRESH_S = 1.5          # a detection counts as "current" if seen within this long
 TARGET_CENTER_TOL = 0.30      # |x| below this = target ~centered -> walk straight at it
-PAN_FOLLOW_GAIN = 25          # deg of head pan per unit target offset while approaching
-PAN_MIN, PAN_MAX, PAN_CENTER = 30, 150, 90
+PAN_FOLLOW_GAIN = 25          # deg of head pan per unit target x-offset while tracking
+FOLLOW_DEADBAND = 0.06        # |offset| below this = centered enough, don't twitch
+PAN_MIN, PAN_MAX, PAN_CENTER = 10, 170, 90   # matches the UI pan slider range
+# Auto mode NEVER moves the tilt (up/down) servo — it stays wherever the UI
+# slider put it. Scanning and target tracking are pan-only.
+TILT_CENTER = 60
 AUTO_MOTOR_TICK_S = 0.1       # auto-loop pacing when locomoting on motors (gait paces itself)
+# Alert flow: the first fire/human sighting HALTS the robot and raises a big
+# dashboard alert; it stays frozen until the operator sends auto:resume (the
+# halt never expires on its own). After the operator has granted movement,
+# the target being gone this long ends the episode and re-arms alerts.
+ALERT_CLEAR_S = 4.0
 
 
 class MotionWorker:
@@ -164,9 +181,17 @@ class MotionWorker:
         self.target_human: dict | None = None
         self.auto_turn_ms = AUTO_TURN_MS_DEFAULT
         self._auto_dir: str | None = None
-        self._scan_idx = 0
-        self._scan_ts = 0.0
+        self._scan_dir = 1        # +1 sweeping right, -1 sweeping left
+        self._scan_ts = 0.0       # last scan update (0 = sweep not started yet)
         self._pan_angle = PAN_CENTER
+        self._tilt_angle = TILT_CENTER
+        self._alert_kind: str | None = None  # "fire"/"human" episode in progress
+        self._alert_granted = False          # operator approved movement (auto:resume)
+        self._alert_seen_ts = 0.0            # last time the alert's target was seen
+        # Bluetooth-speaker sound effects: a chirp per show move, a repeating
+        # step sound while driving, a siren on auto-mode alerts. Best-effort —
+        # the robot moves normally even with no speaker paired.
+        self.sounds = SoundPlayer()
         self.robot = create_robot(port=ROBOT_PORT, baud=ROBOT_BAUD)
         self.client = mqtt.Client()
         self.client.on_connect = self.on_connect
@@ -271,11 +296,18 @@ class MotionWorker:
         self.active_direction = None
         self._auto_dir = None
         self.phase_index = 0
+        # A mode flip is the operator taking control: drop any pending alert halt.
+        if self._alert_kind is not None:
+            self.publish_event("alert:clear")
+        self._alert_kind = None
+        self._alert_granted = False
         # drive_mode (legs/motors) is preserved across the switch — halt whatever
         # is moving and settle into the posture that drive_mode wants.
         self._motor_stop()
+        self.sounds.stop_loop()
+        self.sounds.play("mode")
         if new_mode == "auto":
-            self._scan_idx = 0
+            self._scan_dir = 1
             self._scan_ts = 0.0
             self.move_head("oz", PAN_CENTER)   # face forward, then start sweeping
             self._settle_posture()
@@ -291,9 +323,13 @@ class MotionWorker:
         """Stationary posture for the current drive mode: stand on legs, or tuck
         the legs up so the robot rests on its wheels for motor driving."""
         if self.drive_mode == "motors":
-            self.robot.legs_up(time_ms=ROBOT_STAND_TIME_MS)
+            self.robot.legs_up(time_ms=ROBOT_SETTLE_TIME_MS)
         else:
-            self._do_stand()
+            self.robot.stand(
+                time_ms=ROBOT_SETTLE_TIME_MS,
+                height=self.walk_height,
+                ground_knee=compute_ground_knee(self.walk_height),
+            )
 
     def _motor_drive(self, direction: str) -> None:
         """Drive the DC motors and remember the latched direction."""
@@ -307,15 +343,41 @@ class MotionWorker:
     def run_auto_step(self) -> None:
         """One iteration of the autonomous behaviour (paced by the gait phase)."""
         now = time.time()
+        target = self.fresh_target(now)
+        if target is not None:
+            self._alert_seen_ts = now
+
+        # 0) Alert flow: the FIRST sight of a fire/human halts the robot and raises
+        #    a big dashboard alert. It freezes completely (body AND head) until
+        #    the operator grants movement with `auto:resume`.
+        if target is not None and self._alert_kind is None and not self._alert_granted:
+            self._alert_kind = target["kind"]
+            self.halt_movement()
+            self.sounds.play("alert")
+            self.publish_event(f"alert:{target['kind']}")
+            print(f"ALERT: {target['kind']} detected - halted, waiting for operator")
+
+        if self._alert_kind is not None and not self._alert_granted:
+            # Parked: freeze completely — no walking, no head movement, nothing.
+            # Only the operator releases the robot (auto:resume or a flip to
+            # manual); the halt does NOT expire on its own, even if the target
+            # walks out of the camera's view.
+            time.sleep(AUTO_MOTOR_TICK_S)
+            return
+
+        # Operator-approved episode over (target lost long enough): re-arm alerts.
+        if self._alert_granted and now - self._alert_seen_ts > ALERT_CLEAR_S:
+            self._alert_kind = None
+            self._alert_granted = False
+            self.publish_event("alert:clear")
 
         # 1) Obstacle ahead wins: stop, turn right ~90°, resume on the next iteration.
         if self.obstacle:
             self.auto_turn_right()
             return
 
-        # 2) A fresh human/fire detection: the vision node already raised the alert;
-        #    here we "go to it" — steer the body toward it and keep the camera on it.
-        target = self.fresh_target(now)
+        # 2) A fresh, operator-approved human/fire detection: "go to it" — steer
+        #    the body toward it and keep the camera on it.
         if target is not None:
             self.approach_target(target)
             return
@@ -324,10 +386,20 @@ class MotionWorker:
         self.scan_head(now)
         self._locomote("forward")
 
+    def halt_movement(self) -> None:
+        """Stop whatever is moving right now, in either drive mode."""
+        self._auto_dir = None
+        self.phase_index = 0
+        self._motor_stop()
+        self.sounds.stop_loop()
+        if self.drive_mode == "legs":
+            self._do_stand()
+
     def auto_turn_right(self, require_auto: bool = True) -> None:
         """Turn right for auto_turn_ms (the tunable ~90°), then settle. Spins the
         motors in motor mode, or runs the right-turn gait in leg mode."""
         self.publish_event("auto:turn_right")
+        self.sounds.start_loop("walk")
         end = time.time() + self.auto_turn_ms / 1000.0
 
         if self.drive_mode == "motors":
@@ -352,6 +424,8 @@ class MotionWorker:
                 )
             self._do_stand()
         self._auto_dir = None
+        if self.mode != "auto":  # manual test_turn: nothing resumes after the turn
+            self.sounds.stop_loop()
 
     def approach_target(self, target: dict) -> None:
         """Steer the body toward a detected target and keep the camera on it."""
@@ -365,23 +439,41 @@ class MotionWorker:
             self._locomote("forward")
 
     def scan_head(self, now: float) -> None:
-        """Sweep the head left/right to search while the body walks forward."""
+        """Sweep the head smoothly across the full pan range while searching.
+
+        Incremental: every auto-loop iteration advances the pan a little from
+        wherever the head currently is (so it also resumes seamlessly after
+        target-tracking moved it), bouncing at PAN_MIN/PAN_MAX. The step is
+        time-based, so the sweep speed is the same whether the loop is paced
+        by motor ticks (0.1 s) or by gait phases (up to ~0.7 s)."""
         if not AUTO_HEAD_SCAN:
             return
-        if now - self._scan_ts >= SCAN_PERIOD_S:
-            self._scan_ts = now
-            self._scan_idx = (self._scan_idx + 1) % len(SCAN_PAN_ANGLES)
-            self.move_head("oz", SCAN_PAN_ANGLES[self._scan_idx])
+        dt = min(now - self._scan_ts, 0.8) if self._scan_ts else AUTO_MOTOR_TICK_S
+        self._scan_ts = now
+
+        angle = self._pan_angle + self._scan_dir * SCAN_SPEED_DEG_S * dt
+        if angle >= PAN_MAX:
+            angle, self._scan_dir = PAN_MAX, -1
+        elif angle <= PAN_MIN:
+            angle, self._scan_dir = PAN_MIN, 1
+        # Give the servo the whole interval (plus a margin) to get there, so it
+        # glides between updates instead of snapping and holding.
+        self.move_head("oz", angle, time_ms=int(dt * 1300))
 
     def point_head_at(self, x: float) -> None:
-        """Proportionally pan the head so the target stays centered in view."""
-        angle = self._pan_angle + x * PAN_FOLLOW_GAIN
-        self.move_head("oz", max(PAN_MIN, min(PAN_MAX, angle)))
+        """Proportionally pan the head so the target stays centered in view —
+        pan only, the tilt servo is never moved automatically. Small offsets
+        inside the deadband are ignored so detection noise doesn't twitch the
+        head (and the serial bus isn't spammed when already locked on)."""
+        if abs(x) > FOLLOW_DEADBAND:
+            angle = self._pan_angle + x * PAN_FOLLOW_GAIN
+            self.move_head("oz", max(PAN_MIN, min(PAN_MAX, angle)))
 
     def _locomote(self, direction: str) -> None:
         """Move one auto-loop step in `direction`, using whichever drive mode is
         active: one gait phase on the legs, or latch the motors (paced by a tick
         so the loop can keep checking obstacle/target/head-scan)."""
+        self.sounds.start_loop("walk")
         if self.drive_mode == "motors":
             self._motor_drive(direction)
             time.sleep(AUTO_MOTOR_TICK_S)
@@ -422,16 +514,32 @@ class MotionWorker:
         if len(parts) >= 2 and parts[1] == "test_turn":
             print("Auto test turn (calibration)")
             self.auto_turn_right(require_auto=False)
+            return
+        if len(parts) >= 2 and parts[1] == "resume":
+            # Operator grants movement after an alert halt (big dashboard alert).
+            if self._alert_kind is not None and not self._alert_granted:
+                self._alert_granted = True
+                self.publish_event("alert:granted")
+                print("Operator granted movement - resuming auto behaviour")
 
-    def move_head(self, axis: str, angle: float) -> None:
+    def move_head(self, axis: str, angle: float, time_ms: int = HEAD_MOVE_TIME_MS) -> None:
         """Move a head servo (oy=tilt, oz=pan). Main-thread only (shared serial bus)."""
         angle = max(0, min(180, int(angle)))
+        # The wire position differs from the logical angle: tilt gets the mount
+        # offset, and both servos are mounted mirrored so the angle is flipped.
+        # _pan_angle/_tilt_angle and all pan/tilt logic stay in the logical
+        # space the UI and auto-scan/tracking use.
+        wire = angle
+        if axis == "oy":
+            wire = max(0, min(180, angle - HEAD_TILT_UP_OFFSET_DEG))
         servo_id = HEAD_SERVO_OY if axis == "oy" else HEAD_SERVO_OZ
         self.robot.controller.move_servos(
-            [LobotServo(servo_id, angle_to_lobot(angle))], HEAD_MOVE_TIME_MS,
+            [LobotServo(servo_id, angle_to_lobot(180 - wire))], max(50, time_ms),
         )
         if axis == "oz":
             self._pan_angle = angle
+        else:
+            self._tilt_angle = angle
 
     @staticmethod
     def _parse_target(payload: str) -> dict | None:
@@ -478,6 +586,7 @@ class MotionWorker:
         if command.startswith("start:"):
             if self.mode == "auto":
                 return  # the robot drives itself in auto mode — ignore manual drive
+            self.sounds.start_loop("walk")
             direction = command.split(":", 1)[1]
             if self.drive_mode == "motors":
                 self._motor_drive(direction)  # legs are already lifted; roll on motors
@@ -517,6 +626,12 @@ class MotionWorker:
         handler = self.one_shot_handlers().get(command)
         if handler:
             self.active_direction = None
+            was_moving = self.sounds.stop_loop()
+            if command == "stand":
+                if was_moving:
+                    self.sounds.play("stop")
+            else:
+                self.sounds.play(command)
             handler()
 
     def one_shot_handlers(self):
@@ -553,6 +668,8 @@ class MotionWorker:
         self._auto_dir = None
         self.phase_index = 0
         self._motor_stop()
+        self.sounds.stop_loop()
+        self.sounds.play("mode")
         self.drive_mode = mode
         self._settle_posture()
         print(f"Drive mode -> {mode.upper()}")
@@ -600,6 +717,7 @@ class MotionWorker:
 
     def shutdown(self) -> None:
         try:
+            self.sounds.stop_all()
             self.publish_status("offline")
             self.motors.close()
             self.robot.stop()

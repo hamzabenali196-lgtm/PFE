@@ -9,6 +9,7 @@ import paho.mqtt.client as mqtt
 # --- CONFIGURATION ---
 MQTT_HOST = "localhost"
 MQTT_PORT = 1883
+CAMERA_INDEX = 1  # USB2.0 PC CAMERA enumerates at /dev/video1 on this Pi (no /dev/video0)
 COORDS = "35.7649,10.8062"
 
 FACE_CONFIDENCE = 0.6
@@ -38,10 +39,13 @@ FIRE_CLEAR_SECONDS = 3.0   # flame must be gone this long before clearing the al
 
 # --- IR obstacle sensor (FC-51 / generic 3-pin digital IR module) ---
 # Digital module: OUT is just HIGH/LOW, not a distance. The detection range (a few cm
-# up to ~30 cm) is set by the little blue potentiometer on the board. Power it from the
-# Pi's 3.3V pin so OUT is a 3.3V-safe signal — then NO resistor/divider is needed. See
-# the wiring notes at the bottom of this file.
-IR_OBSTACLE_PIN = 23       # BCM GPIO for the sensor OUT pin (header pin 16)
+# up to ~30 cm) is set by the little blue potentiometer on the board. Power it from
+# the Pi's 3.3V pin so OUT is a 3.3V-safe signal — then NO resistor/divider is needed.
+# See the wiring notes at the bottom of this file.
+# NOTE: the sensor that was on GPIO23 is stuck permanently at "obstacle" (never
+# changes state, tested 2026-07-04) — dead emitter or shorted output. Only the
+# GPIO16 sensor is used for detection until the other board is replaced.
+IR_OBSTACLE_PIN = 16       # BCM GPIO for the sensor's OUT pin (header pin 36)
 IR_ACTIVE_LOW   = True     # most modules pull OUT LOW when an obstacle is seen
 IR_PERIOD       = 0.5      # seconds between IR prints (throttle so it doesn't spam)
 
@@ -93,29 +97,36 @@ def detect_flame(frame):
     return boxes
 
 
-_ir_sensor = None  # lazily created IR sensor handle (None=untried, False=unavailable)
+_ir_sensors = {}  # pin -> gpiozero handle (missing/False = untried/unavailable)
 
 
-def read_ir_obstacle():
-    """Return True if the IR sensor sees an obstacle, False if clear, None if unavailable.
+def _read_ir_pin(pin):
+    """Return True/False/None for a single IR sensor pin. Lazily creates the handle.
 
     Uses gpiozero on the lgpio backend, which is the path that actually works on the
     Pi 5's RP1 GPIO (RPi.GPIO does not). The digital IR module only reports near/far
     around the threshold set by its on-board potentiometer — it is not a distance.
     """
-    global _ir_sensor
-    if _ir_sensor is None:
+    sensor = _ir_sensors.get(pin)
+    if sensor is None:
         try:
             from gpiozero import DigitalInputDevice
             # pull_up matches the module polarity so a disconnected pin reads "clear",
             # and gpiozero's .value == 1 then means "active" = obstacle either way.
-            _ir_sensor = DigitalInputDevice(IR_OBSTACLE_PIN, pull_up=IR_ACTIVE_LOW)
+            sensor = DigitalInputDevice(pin, pull_up=IR_ACTIVE_LOW)
         except Exception as e:
-            print(f"Capteur IR indisponible : {e}")
-            _ir_sensor = False  # remember the failure, don't retry every call
-    if not _ir_sensor:
+            print(f"Capteur IR (GPIO{pin}) indisponible : {e}")
+            sensor = False  # remember the failure, don't retry every call
+        _ir_sensors[pin] = sensor
+    if not sensor:
         return None
-    return bool(_ir_sensor.value)
+    return bool(sensor.value)
+
+
+def read_ir_obstacle():
+    """Return True if the IR sensor sees an obstacle, False if clear,
+    None if the sensor is unavailable."""
+    return _read_ir_pin(IR_OBSTACLE_PIN)
 
 
 def print_ir():
@@ -143,7 +154,7 @@ def main():
     face_net  = cv2.dnn.readNetFromCaffe("deploy.prototxt", "res10_300x300_ssd_iter_140000.caffemodel")
     print("Detection visage (Caffe SSD) + feu (couleur HSV) active")
 
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(CAMERA_INDEX)
 
     # Face: symmetric stability filter (same speed to detect and clear)
     face_last      = None
@@ -171,7 +182,7 @@ def main():
                 time.sleep(0.5)
                 if not cap.isOpened():
                     cap.release()
-                    cap = cv2.VideoCapture(0)
+                    cap = cv2.VideoCapture(CAMERA_INDEX)
                 continue
 
             (h, w) = frame.shape[:2]
@@ -324,10 +335,15 @@ if __name__ == "__main__":
 #  comparator (LM393) flips OUT when something is within range. The little blue
 #  potentiometer sets that range — turn it to tune roughly 2..30 cm.
 #
+#  Only ONE sensor is used for detection: the board that was on GPIO23 is stuck
+#  permanently LOW ("obstacle", never toggles) and is ignored by the code. If a
+#  replacement is wired to GPIO23 later, restore the two-sensor OR logic in
+#  read_ir_obstacle() (see git history).
+#
 #  Connections (NO resistor needed when powered from 3.3V):
-#    Module VCC -> Pi 3.3V    (header pin 1)   <- 3.3V supply keeps OUT at a safe 3.3V
-#    Module GND -> Pi GND     (header pin 6)
-#    Module OUT -> Pi GPIO23  (header pin 16)
+#    Sensor VCC -> Pi 3.3V    (header pin 1)   <- 3.3V supply keeps OUT at a safe 3.3V
+#    Sensor GND -> Pi GND     (header pin 6, or any other GND pin)
+#    Sensor OUT -> Pi GPIO16  (header pin 36)
 #
 #  Why power from 3.3V: many of these boards drive OUT up to whatever VCC is.
 #  Powered from 5V, OUT swings to 5V -> same overvoltage problem as the HC-SR04.

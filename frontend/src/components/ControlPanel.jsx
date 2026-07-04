@@ -138,11 +138,11 @@ export default function ControlPanel({ onHello, onDriveCommand, headPos, onHeadM
             <strong className="head-slider-val">{headPos.pan}°</strong>
           </div>
           <input
-            type="range" min="30" max="150" step="1"
+            type="range" min="10" max="170" step="1"
             value={headPos.pan}
             onChange={(e) => onHeadMove('oz', Number(e.target.value))}
             className="head-slider"
-            style={{ '--pct': `${(headPos.pan - 30) / 120 * 100}%` }}
+            style={{ '--pct': `${(headPos.pan - 10) / 160 * 100}%` }}
             aria-label="Head pan"
           />
           <div className="head-slider-markers"><span>Left</span><span>Right</span></div>
